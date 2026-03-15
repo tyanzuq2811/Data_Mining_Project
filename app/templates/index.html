@@ -1,0 +1,374 @@
+﻿<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bảo Trì Dự Đoán | AI Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.0.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/lucide-static@latest/font/lucide.min.css" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              neon: {
+                50:  '#e0f7ff',
+                100: '#b3ecff',
+                200: '#80dfff',
+                300: '#4dd2ff',
+                400: '#00bfff',
+                500: '#00a8e8',
+                600: '#0090c9',
+                700: '#006d99',
+                800: '#004d6d',
+                900: '#0a1628',
+                950: '#060d17',
+              },
+            },
+            fontFamily: {
+              orbitron: ['Orbitron', 'sans-serif'],
+              inter: ['Inter', 'sans-serif'],
+            },
+            animation: {
+              'glow-pulse': 'glow-pulse 2s ease-in-out infinite',
+              'slide-up': 'slide-up 0.6s ease-out',
+              'slide-in-left': 'slide-in-left 0.5s ease-out',
+              'fade-in': 'fade-in 0.8s ease-out',
+              'counter': 'counter 1.5s ease-out',
+              'scan-line': 'scan-line 3s linear infinite',
+              'border-glow': 'border-glow 2s ease-in-out infinite alternate',
+              'float': 'float 3s ease-in-out infinite',
+            },
+            keyframes: {
+              'glow-pulse': {
+                '0%, 100%': { boxShadow: '0 0 5px #00bfff, 0 0 10px #00bfff33' },
+                '50%': { boxShadow: '0 0 20px #00bfff, 0 0 40px #00bfff66' },
+              },
+              'slide-up': {
+                '0%': { transform: 'translateY(30px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
+              },
+              'slide-in-left': {
+                '0%': { transform: 'translateX(-30px)', opacity: '0' },
+                '100%': { transform: 'translateX(0)', opacity: '1' },
+              },
+              'fade-in': {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              'scan-line': {
+                '0%': { transform: 'translateY(-100%)' },
+                '100%': { transform: 'translateY(100%)' },
+              },
+              'border-glow': {
+                '0%': { borderColor: '#00bfff33' },
+                '100%': { borderColor: '#00bfff' },
+              },
+              'float': {
+                '0%, 100%': { transform: 'translateY(0px)' },
+                '50%': { transform: 'translateY(-8px)' },
+              },
+            },
+          },
+        },
+      }
+    </script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="grid-bg min-h-screen relative overflow-x-hidden">
+
+<!-- Particle background -->
+<canvas id="particles"></canvas>
+
+<!-- ═══ NAVBAR ═══ -->
+<nav class="sticky top-0 z-50 border-b border-neon-400/20 backdrop-blur-xl bg-neon-950/80">
+  <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3 animate-slide-in-left">
+      <div class="w-10 h-10 rounded-lg bg-neon-400/20 border border-neon-400/50 flex items-center justify-center animate-glow-pulse">
+        <svg class="w-6 h-6 text-neon-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="font-orbitron font-bold text-lg neon-text tracking-wider">BẢO TRÌ DỰ ĐOÁN</h1>
+        <p class="text-[10px] text-neon-300/60 tracking-widest uppercase">Hệ thống phát hiện lỗi bằng AI</p>
+      </div>
+    </div>
+    <div class="hidden md:flex items-center gap-1">
+      <button onclick="scrollToSection('overview')" class="px-3 py-1.5 text-sm text-neon-200/70 hover:text-neon-400 transition-colors rounded">Tổng quan</button>
+      <button onclick="scrollToSection('predict')" class="px-3 py-1.5 text-sm text-neon-200/70 hover:text-neon-400 transition-colors rounded">Dự đoán</button>
+      <button onclick="scrollToSection('charts')" class="px-3 py-1.5 text-sm text-neon-200/70 hover:text-neon-400 transition-colors rounded">Phân tích</button>
+      <button onclick="scrollToSection('insights')" class="px-3 py-1.5 text-sm text-neon-200/70 hover:text-neon-400 transition-colors rounded">Kiến nghị</button>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="theme-toggle" onclick="toggleTheme()"
+              class="px-3 py-1.5 text-sm rounded-lg border border-neon-400/30 text-neon-400 hover:border-neon-400 transition-all cursor-pointer"
+              title="Chuyển đổi chế độ Tối/Sáng">
+        <span id="theme-icon">&#9728;&#65039;</span> <span id="theme-label">Sáng</span>
+      </button>
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-green-500/20 border border-green-500/40 text-green-400">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+        HỆ THỐNG HOẠT ĐỘNG
+      </span>
+    </div>
+  </div>
+</nav>
+
+<main class="relative z-10 max-w-7xl mx-auto px-4 py-8 space-y-10">
+
+  <!-- ═══ SECTION: OVERVIEW KPIs ═══ -->
+  <section id="overview" class="animate-slide-up">
+    <h2 class="font-orbitron text-2xl font-bold mb-6 neon-text-sm flex items-center gap-3">
+      <span class="w-1.5 h-8 bg-neon-400 rounded-full"></span>
+      TỔNG QUAN HỆ THỐNG
+    </h2>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="kpi-grid">
+      <!-- Filled by JS -->
+    </div>
+  </section>
+
+  <!-- ═══ SECTION: PREDICTION FORM ═══ -->
+  <section id="predict" class="animate-slide-up" style="animation-delay: 0.1s">
+    <h2 class="font-orbitron text-2xl font-bold mb-6 neon-text-sm flex items-center gap-3">
+      <span class="w-1.5 h-8 bg-neon-400 rounded-full"></span>
+      DỰ ĐOÁN LỖI
+    </h2>
+    <div class="grid md:grid-cols-5 gap-6">
+      <!-- Input Form -->
+      <div class="md:col-span-2 neon-card p-6 relative overflow-hidden scan-overlay">
+        <h3 class="font-orbitron text-sm text-neon-300 mb-5 tracking-wider">DỮ LIỆU CẢM BIẾN</h3>
+        <form id="predict-form" class="space-y-4">
+          <div>
+            <label class="block text-xs text-neon-200/60 mb-1 uppercase tracking-wider">Loại sản phẩm</label>
+            <select id="inp-type" class="neon-input w-full rounded-lg px-3 py-2.5 text-sm">
+              <option value="L">L — Chất lượng thấp</option>
+              <option value="M" selected>M — Chất lượng trung bình</option>
+              <option value="H">H — Chất lượng cao</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-neon-200/60 mb-1 uppercase tracking-wider">Nhiệt độ khí (K)</label>
+              <input type="number" id="inp-air" value="300.0" step="0.1" min="290" max="310"
+                     class="neon-input w-full rounded-lg px-3 py-2.5 text-sm font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-neon-200/60 mb-1 uppercase tracking-wider">Nhiệt độ xử lý (K)</label>
+              <input type="number" id="inp-proc" value="310.0" step="0.1" min="300" max="320"
+                     class="neon-input w-full rounded-lg px-3 py-2.5 text-sm font-mono">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs text-neon-200/60 mb-1 uppercase tracking-wider">Tốc độ quay (rpm)</label>
+              <input type="number" id="inp-speed" value="1500" step="1" min="1000" max="3000"
+                     class="neon-input w-full rounded-lg px-3 py-2.5 text-sm font-mono">
+            </div>
+            <div>
+              <label class="block text-xs text-neon-200/60 mb-1 uppercase tracking-wider">Mô-men xoắn (Nm)</label>
+              <input type="number" id="inp-torque" value="40.0" step="0.1" min="0" max="80"
+                     class="neon-input w-full rounded-lg px-3 py-2.5 text-sm font-mono">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-neon-200/60 mb-1 uppercase tracking-wider">Độ mài dao cụ (phút)</label>
+            <input type="range" id="inp-wear" min="0" max="260" value="100" class="w-full accent-neon-400"
+                   oninput="document.getElementById('wear-val').textContent = this.value + ' min'">
+            <div class="flex justify-between text-xs text-neon-300/50 mt-1">
+              <span>0</span>
+              <span id="wear-val" class="text-neon-400 font-mono font-bold">100 min</span>
+              <span>260</span>
+            </div>
+          </div>
+          <button type="submit" id="predict-btn"
+                  class="w-full py-3 rounded-lg font-orbitron font-bold text-sm tracking-wider
+                         bg-gradient-to-r from-neon-600 to-neon-400 text-neon-950
+                         hover:shadow-[0_0_30px_#00bfff66] transition-all duration-300
+                         active:scale-[0.98] disabled:opacity-50">
+            <span id="btn-text">PHÂN TÍCH & DỰ ĐOÁN</span>
+            <span id="btn-loader" class="hidden">
+              <svg class="animate-spin inline w-5 h-5" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+              </svg>
+              ĐANG XỬ LÝ...
+            </span>
+          </button>
+        </form>
+      </div>
+
+      <!-- Result Panel -->
+      <div class="md:col-span-3 neon-card p-6 relative" id="result-panel">
+        <div id="result-placeholder" class="flex flex-col items-center justify-center h-full min-h-[350px] text-neon-300/30">
+          <svg class="w-16 h-16 mb-4 animate-float" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+                  d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
+          </svg>
+          <p class="font-orbitron text-sm tracking-wider">CHỜ DỮ LIỆU CẢM BIẾN</p>
+          <p class="text-xs mt-1">Nhập giá trị và nhấn Dự đoán</p>
+        </div>
+        <div id="result-content" class="hidden space-y-5">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION: ANALYTICS (Tabs) ═══ -->
+  <section id="charts" class="animate-slide-up" style="animation-delay: 0.2s">
+    <h2 class="font-orbitron text-2xl font-bold mb-6 neon-text-sm flex items-center gap-3">
+      <span class="w-1.5 h-8 bg-neon-400 rounded-full"></span>
+      BẢNG PHÂN TÍCH
+    </h2>
+
+    <!-- Tab Buttons -->
+    <div class="flex gap-1 border-b border-neon-400/20 mb-6 overflow-x-auto pb-px">
+      <button class="tab-btn active px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all" data-tab="classification">Phân loại</button>
+      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="clustering">Phân cụm</button>
+      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="anomaly">Bất thường</button>
+      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="regression">Hồi quy</button>
+      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="semisupervised">Bán giám sát</button>
+      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="scatter">Khám phá Scatter</button>
+      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="gallery">Thư viện hình ảnh</button>
+    </div>
+
+    <!-- Tab Content -->
+    <div id="tab-content">
+      <!-- Classification -->
+      <div id="tab-classification" class="tab-pane grid md:grid-cols-2 gap-6">
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">SO SÁNH MÔ HÌNH (F1 / PR-AUC)</h4>
+          <div id="chart-clf-bar" style="height:480px"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">ĐỘ ỔN ĐỊNH KIỂM CHỨNG CHÉO</h4>
+          <div id="chart-cv" style="height:480px"></div>
+        </div>
+        <div class="md:col-span-2 neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">BẢNG CHI TIẾT CHỈ SỐ</h4>
+          <div class="overflow-x-auto" id="clf-table"></div>
+        </div>
+      </div>
+
+      <!-- Clustering -->
+      <div id="tab-clustering" class="tab-pane hidden grid md:grid-cols-2 gap-6">
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">ĐIỂM SILHOUETTE</h4>
+          <div id="chart-cluster-sil" style="height:500px"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">BẢNG CHỈ SỐ PHÂN CỤM</h4>
+          <div class="overflow-x-auto" id="cluster-table"></div>
+        </div>
+      </div>
+
+      <!-- Anomaly -->
+      <div id="tab-anomaly" class="tab-pane hidden grid md:grid-cols-2 gap-6">
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">SO SÁNH PHÁT HIỆN BẤT THƯỜNG</h4>
+          <div id="chart-anomaly" style="height:480px"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ BẤT THƯỜNG</h4>
+          <div class="overflow-x-auto" id="anomaly-table"></div>
+        </div>
+      </div>
+
+      <!-- Regression -->
+      <div id="tab-regression" class="tab-pane hidden grid md:grid-cols-2 gap-6">
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">SO SÁNH MÔ HÌNH HỒI QUY</h4>
+          <div id="chart-reg" style="height:480px"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ HỒI QUY</h4>
+          <div class="overflow-x-auto" id="reg-table"></div>
+        </div>
+      </div>
+
+      <!-- Semi-supervised -->
+      <div id="tab-semisupervised" class="tab-pane hidden grid md:grid-cols-2 gap-6">
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">ĐƯỜNG HỌC BÁN GIÁM SÁT</h4>
+          <div id="chart-semi" style="height:480px"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ BÁN GIÁM SÁT</h4>
+          <div class="overflow-x-auto" id="semi-table"></div>
+        </div>
+      </div>
+
+      <!-- Scatter Explorer -->
+      <div id="tab-scatter" class="tab-pane hidden">
+        <div class="neon-card p-5">
+          <div class="flex flex-wrap gap-3 mb-4">
+            <div>
+              <label class="text-xs text-neon-300/60 uppercase">Trục X</label>
+              <select id="scatter-x" class="neon-input rounded px-2 py-1 text-sm ml-2">
+                <option value="air_temp">Nhiệt độ khí</option>
+                <option value="proc_temp">Nhiệt độ xử lý</option>
+                <option value="rot_speed" selected>Tốc độ quay</option>
+                <option value="torque">Mô-men xoắn</option>
+                <option value="tool_wear">Độ mài dao cụ</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs text-neon-300/60 uppercase">Trục Y</label>
+              <select id="scatter-y" class="neon-input rounded px-2 py-1 text-sm ml-2">
+                <option value="air_temp">Nhiệt độ khí</option>
+                <option value="proc_temp">Nhiệt độ xử lý</option>
+                <option value="rot_speed">Tốc độ quay</option>
+                <option value="torque" selected>Mô-men xoắn</option>
+                <option value="tool_wear">Độ mài dao cụ</option>
+              </select>
+            </div>
+            <button onclick="loadScatter()" class="px-4 py-1 rounded bg-neon-400/20 border border-neon-400/40 text-neon-400 text-sm hover:bg-neon-400/30 transition-colors">
+              Cập nhật
+            </button>
+          </div>
+          <div id="chart-scatter" style="height:550px"></div>
+        </div>
+      </div>
+
+      <!-- Figure Gallery -->
+      <div id="tab-gallery" class="tab-pane hidden">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="gallery-grid">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION: INSIGHTS ═══ -->
+  <section id="insights" class="animate-slide-up" style="animation-delay: 0.3s">
+    <h2 class="font-orbitron text-2xl font-bold mb-6 neon-text-sm flex items-center gap-3">
+      <span class="w-1.5 h-8 bg-neon-400 rounded-full"></span>
+      KIẾN NGHỊ HÀNH ĐỘNG
+    </h2>
+    <div class="grid md:grid-cols-2 gap-4" id="insights-grid">
+      <!-- Filled by JS -->
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="text-center py-8 text-xs text-neon-300/30 border-t border-neon-400/10">
+    <p class="font-orbitron tracking-wider">BẢO TRÌ DỰ ĐOÁN AI &mdash; Đồ án Khai phá Dữ liệu 2025</p>
+    <p class="mt-1">Bộ dữ liệu UCI AI4I 2020 &bull; Mô hình Gradient Boosting &bull; F1 = 0.84</p>
+  </footer>
+</main>
+
+<!-- ═══ LIGHTBOX for gallery ═══ -->
+<div id="lightbox" class="fixed inset-0 z-50 bg-black/90 hidden items-center justify-center p-8 backdrop-blur-sm cursor-pointer" onclick="closeLightbox()">
+  <img id="lightbox-img" class="max-w-full max-h-full rounded-lg shadow-2xl shadow-neon-400/20 animate-fade-in" src="" alt="">
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- JAVASCRIPT -->
+<!-- ═══════════════════════════════════════════════ -->
+<script src="/static/app.js"></script>
+
+</body>
+</html>

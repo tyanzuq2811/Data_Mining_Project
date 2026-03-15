@@ -1,0 +1,147 @@
+/* ═══════════════════════════════════════════════
+   BẢO TRÌ DỰ ĐOÁN — Neon Theme Styles
+   ═══════════════════════════════════════════════ */
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: #060d17;
+  color: #e0f7ff;
+}
+
+/* Neon glow text */
+.neon-text {
+  text-shadow: 0 0 7px #00bfff, 0 0 10px #00bfff, 0 0 21px #00bfff, 0 0 42px #0090c9;
+}
+.neon-text-sm {
+  text-shadow: 0 0 4px #00bfff, 0 0 8px #00bfff44;
+}
+
+/* Neon card */
+.neon-card {
+  background: linear-gradient(145deg, #0a1628ee, #0d1f35ee);
+  border: 1px solid #00bfff33;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+.neon-card:hover {
+  border-color: #00bfff;
+  box-shadow: 0 0 15px #00bfff33, inset 0 0 15px #00bfff0d;
+}
+
+/* Grid background */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(0,191,255,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,191,255,.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Scan line overlay */
+.scan-overlay::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00bfff66, transparent);
+  animation: scan-line 3s linear infinite;
+  pointer-events: none;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0a1628; }
+::-webkit-scrollbar-thumb { background: #00bfff55; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #00bfff; }
+
+/* Input glow */
+.neon-input {
+  background: #0a162899;
+  border: 1px solid #00bfff33;
+  color: #e0f7ff;
+  transition: all 0.3s;
+}
+.neon-input:focus {
+  border-color: #00bfff;
+  box-shadow: 0 0 10px #00bfff44;
+  outline: none;
+}
+
+/* Progress bar glow */
+.progress-glow {
+  box-shadow: 0 0 8px #00bfff66;
+}
+
+/* Plotly chart dark theme */
+.js-plotly-plot .plotly .main-svg { background: transparent !important; }
+
+/* Tab active state */
+.tab-btn.active {
+  color: #00bfff;
+  border-bottom: 2px solid #00bfff;
+  text-shadow: 0 0 6px #00bfff88;
+}
+
+/* Risk badge animations */
+.risk-critical { animation: glow-pulse 1s ease-in-out infinite; background: #ff2d5599; border-color: #ff2d55; }
+.risk-high { background: #ff8c0099; border-color: #ff8c00; }
+.risk-medium { background: #ffd60a44; border-color: #ffd60a; }
+.risk-low { background: #00ff8844; border-color: #00ff88; }
+
+/* Number counting animation */
+@keyframes count-up {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+.count-anim { animation: count-up 0.5s ease-out forwards; }
+
+/* Particle canvas */
+#particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+
+/* ========== LIGHT MODE ========== */
+body.light-mode { background: #f0f4f8 !important; color: #1a202c !important; }
+body.light-mode .grid-bg {
+  background-image: linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+}
+body.light-mode nav { background: rgba(240,244,248,0.92) !important; border-color: rgba(0,0,0,0.08) !important; }
+body.light-mode .neon-text { text-shadow: none !important; color: #0077b6 !important; }
+body.light-mode .neon-text-sm { text-shadow: none !important; color: #0077b6 !important; }
+body.light-mode .neon-card {
+  background: linear-gradient(145deg, #ffffff, #f8f9fa) !important;
+  border-color: rgba(0,0,0,0.10) !important;
+}
+body.light-mode .neon-card:hover { border-color: #0077b6 !important; box-shadow: 0 0 15px rgba(0,119,182,0.12) !important; }
+body.light-mode .neon-input { background: #ffffff !important; border-color: rgba(0,0,0,0.15) !important; color: #1a202c !important; }
+body.light-mode .neon-input:focus { border-color: #0077b6 !important; box-shadow: 0 0 10px rgba(0,119,182,0.15) !important; }
+body.light-mode .tab-btn.active { color: #0077b6 !important; border-bottom-color: #0077b6 !important; text-shadow: none !important; }
+body.light-mode .tab-btn { color: #718096 !important; }
+body.light-mode .tab-btn:hover { color: #0077b6 !important; }
+body.light-mode footer { border-color: rgba(0,0,0,0.06) !important; }
+body.light-mode ::-webkit-scrollbar-track { background: #f0f4f8; }
+body.light-mode ::-webkit-scrollbar-thumb { background: rgba(0,119,182,0.3); }
+body.light-mode ::-webkit-scrollbar-thumb:hover { background: #0077b6; }
+body.light-mode .risk-critical { background: rgba(229,62,62,0.15) !important; border-color: #e53e3e !important; }
+body.light-mode .risk-high { background: rgba(221,107,0,0.15) !important; border-color: #dd6b00 !important; }
+body.light-mode .risk-medium { background: rgba(214,158,46,0.15) !important; border-color: #d69e2e !important; }
+body.light-mode .risk-low { background: rgba(56,161,105,0.15) !important; border-color: #38a169 !important; }
+body.light-mode #particles { opacity: 0.25; }
+body.light-mode .text-neon-400 { color: #0077b6 !important; }
+body.light-mode .text-neon-300\/60, body.light-mode .text-neon-300\/50,
+body.light-mode .text-neon-300\/30, body.light-mode .text-neon-300\/40,
+body.light-mode .text-neon-200\/60, body.light-mode .text-neon-200\/70,
+body.light-mode .text-neon-200\/80 { color: #4a5568 !important; }
+body.light-mode .text-neon-300 { color: #0077b6 !important; }
+body.light-mode .bg-neon-400\/20 { background-color: rgba(0,119,182,0.12) !important; }
+body.light-mode .border-neon-400\/40 { border-color: rgba(0,119,182,0.25) !important; }
+body.light-mode .border-neon-400\/20 { border-color: rgba(0,0,0,0.08) !important; }
+body.light-mode .border-neon-400\/50 { border-color: rgba(0,119,182,0.35) !important; }
+body.light-mode .bg-neon-950\/80 { background-color: rgba(240,244,248,0.92) !important; }
+body.light-mode .bg-neon-900 { background-color: #e2e8f0 !important; }
+body.light-mode .progress-glow { box-shadow: 0 0 8px rgba(0,119,182,0.25); }
+body.light-mode .scan-overlay::after { background: linear-gradient(90deg, transparent, rgba(0,119,182,0.15), transparent); }
+body.light-mode .bg-green-500\/20 { background-color: rgba(56,161,105,0.12) !important; }
+body.light-mode .border-green-500\/40 { border-color: rgba(56,161,105,0.25) !important; }
+body.light-mode .text-green-400 { color: #38a169 !important; }
+body.light-mode .bg-neon-400\/\[0\.03\] { background-color: rgba(0,119,182,0.04) !important; }
+body.light-mode .from-neon-950 { --tw-gradient-from: #f0f4f8; }
