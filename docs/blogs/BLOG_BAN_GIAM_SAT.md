@@ -1,28 +1,78 @@
-# Series Blog: Khám Lộ Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 4: Bán Giám Sát (Semi-Supervised)
+# Series Blog: Khám Phá Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 4: Bán Giám Sát (Semi-Supervised)
 
-## 1. Giới Thiệu: Nghịch Cảnh Dữ Liệu Mồ Côi & Vấn Đề Sparse Labels (Mất Cân Bằng Nhãn)
-Trong thế giới công nghiệp triển khai **Bảo trì dự đoán (Predictive Maintenance)**, một thực trạng kinh điển (Data paradox) thường trực diễn ra: Chúng ta có thể dùng hàng nghìn thiết bị nội suy cảm biến (Sensors IoT) bòn rút tuôn xả liên hồi cả vạn luồng tín hiệu dao động, gia tốc quay vào kho Data Lake mỗi giờ đo đếm vô tận. Tuy nhiên, việc khẳng định chính xác động cơ ấy tại điểm giây đó "Có đang dính chấn bệnh mài mòn ngầm hay không" (hay còn gọi là bước gán nhãn thực - Ground Truth Labeling) thường đòi hỏi chuỗi tháo lắp, kiểm tra vật lý hoặc đong nghiệm từ kỹ sư lão làng cực kì vất vả, đắt đỏ.
-Hệ quả dẫn tới rào cản chí tử: Tập dữ liệu khập khiễng rách rưới có chứa lượng hồ sơ **CÓ NHÃN CỰC KỲ KHAN HIẾM (< 10%)**, trong đống hỗn độn ngập lụt 90% còn rớt lại là mạn ghi chép mồ côi trống trơn (Unlabeled Data).
-Gánh vác sứ mệnh này, cấu trúc kiến trúc **Học Bán Giám Sát (Semi-Supervised Learning)** là điểm xé màng vô cực. Kỹ thuật đẻ ra để dung hàm lấp mảnh dữ liệu chắp vá: Mô hình vừa hấp thụ tri thức học thuật thắt lưng ở mảnh vụn nhãn chuẩn đoán có sẵn (Supervised), chạy vọt băng móc cọ móc dò vạch biên phân phối nằm ngủ nén đằng sau vùng trời điểm mù dữ liệu dạt dào vô tận kia (Unsupervised).
+## 1. Mục tiêu của tab này
+Tab Bán giám sát dùng khi dữ liệu có rất ít nhãn lỗi. Mục tiêu là đánh giá xem có thể tận dụng dữ liệu chưa gán nhãn để cải thiện mô hình hay không.
 
-## 2. Thấu Triệt Thuật Toán Lõi: Khung Chuyển Nhãn Mạo Khách (Pseudo-Labeling & Self-Training)
-Đại diện quyền năng tại thí nghiệm mô phỏng khuyết này mang mã danh **Self-Training Classifier (Mô hình nền tảng tự thân phân loại vòng lặp)**. Cơ chế chủ đạo là đường vạch lối mang tên **Pseudo-Labeling (Cơ cấu suy diễn phết gắn Nhãn Giả)**. 
+Các phương pháp đang so sánh:
+- supervised_only
+- self_training
+- co_training
+- label_spreading
 
-### 2.1 Phương Thức Hoạt Động Kiến Tác Xoay Vòng (Self-Training Loop)
-- **Thuật ngữ chuyên môn:** Đây thuộc dòng mô hình "Wrapper Methods". Nhóm sử dụng một lớp "Base Estimator" (Lõi dự đoán cơ sở cứng, điển hình như Random Forest hay LightGBM). Khởi nguyên vòng đầu tiên, mô hình đâm móng rễ bọc lót đào tạo thu kết bằng nhúm dữ liệu nhỏ đã có nhãn gốc. Tiếp đến, nó tung đòn lệnh Dự Báo Xác Suất (Predict Proba) đánh thốc lên lượng đồ sộ bộ thông số thô 90% Unlabeled. Nếu xác lượng độ phân tách dự đoán (Probability limit) lọt thỏa mãn vượt giới hạn `Threshold` đề mục, dòng hồ sơ đấy được cấy cọc trao tặng con dấu "Pseudo-labels" (Nhãn giả) gắn thành vạch thực, nén chập kết cấu kéo xâu vào kho tệp huấn luyện gốc. Cứ lốc xoáy tuần hoàn như thế (Retrain loop), mô hình trưởng thành bùng nổ vượt cấp ngấu nghiến gặm kiến thức rã rượi.
-- **Diễn giải trực quan:** Quá trình giống như tạo "Một cỗ thợ AI thực tập chuyên viên học việc rảo rực mạo hiểm". Hút húp bài cốt lõi dấu hiệu từ một cuốn bách khoa bệnh án 10% có phím giải sẵn. Khi AI nhai xong ngấm bài, ta tung cửa xưởng để lính thợ bách bộ thám kiểm 90% mạn động cơ đục lờ chưa biết bệnh danh. Đứng kế cái máy lạ quơ tay rà độ rung nhiệt, lính bốc *"Ê, cái dải vòng tua máy sụt bất cân biên này hao hao sách đến 95% độ khớp. Tao phết luôn mực cược nhãn máy này Dính Hỏng Trục!"*. Thế là AI quệt miếng Nhãn-Máy-Lỗi mạo danh vào đó. Chu trình xoay vần... mang cục cuốn tập tự chế hòa chung xấp thật cũ, giam lại mài võ học thêm vòng trình độ nữa thấu đạt sự sắc lạnh.
+## 2. Cách đọc chỉ số
+- F1: chất lượng tổng thể trong bối cảnh mất cân bằng lớp.
+- Precision/Recall: kiểm soát cảnh báo giả và bỏ sót lỗi.
+- Pseudo-label risk: đánh giá rủi ro của nhãn giả (false alarm/miss).
 
-### 2.2 Threshold: Ngưỡng Tin Cậy Trọng Tài & Rủi Ro Lan Lan Sai Số (Error Propagation)
-- **Thuật ngữ chuyên môn:** Tham số khóa cửa then chốt vĩnh viễn là `Threshold`. Nó quy gá rào cản Mức Tin Cậy Tối Thiểu (Minimum Probability Confidence) để lõi máy ép phê duyệt sự tin chắc lấn tới quyết nhét một máy Unlabeled vào cọ bôi nhãn giả nhập làn luồng mới.
-- **Diễn giải trực quan:** Đó là "Điểm kềm hãm của bản lĩnh". Nếu tháo ống lới lỏng thả phanh giới hạn (Threshold tuột biên mức 60% thấp lè tè), bộ óc thợ bị mơn trớn, thấy máy ho cày sụt nhẹ đã vác bình xịt dán nhãn Kẹt hỏng tản khí. Tử lộ ở đây: Các dự toán dán phông giả trật nhịp đó gom lại (Misclassifications) mang đi quay nướng lại đọng rết dấy lên một chứng dịch khủng khiếp xé toạc mô hình mang tên **Lan Truyền Sai Số (Error propagation)**! Dịch lây nhiễm tột thảm lôi theo vạn máy chạy hiền hòa thành chuỗi còi hú Báo Đồng Giả (False Alarm) ngập điếc óc công xưởng. Rào cản là lệnh răn đe đóng mốc khóa Threshold gông lại Thật Khắt Khe Khắc Nghiệt (thường luôn ` >= 0.95`).
+## 3. Kết quả định lượng chính
+Theo kết quả hiện tại:
 
-## 3. Cấu Hình Thí Thạch Masking Mô Phỏng Che Lấp Nhãn Thực Sự
-- Kỹ sư ban điều phối dàn cảnh trò chơi mô phỏng khốc liệt "Bịt Xóa Mắt Hiện Thực" (Masking Strategy Evaluation). Đốc công thẳng tay tước xóa đoạt quyền tiêu hủy trắng từ 80% lấp đến ngập ngưỡng ngang 90% thông điệp xác nhãn cột chỉ số máy Hỏng (`Machine failure`) biến bốc hơi (-1) trong tệp gốc kho AI4I. Ép mô hình lâm trượt bước ngoặt: Một cái chọn phương thức chịu thụt lùi phó mặc buông tay ôm múc cục 10% bé tí nhai nhai đi lại (Kêu là hệ **Supervised Base** trần), hoặc liều chết đấu gã ngoại lai **Self-Training** chổm dậy giăng nhãn mạo danh hút sinh lực cướp trọn khối 90% càn càn bóng mờ nương theo.
+1. Ở 5% nhãn:
+	- supervised_only: F1 = 0.0845
+	- self_training: F1 = 0.0000
+	- label_spreading: F1 = 0.0563
 
-## 4. Bóc Tỉa Báo Cáo Đo Đạt Hiệu Suất Nanh Vuốt
-- **Đại Tuyến Thành Tựu Ngưỡng Chắn Cao (Threshold = 0.95):** Với thanh gươm nẹp mức chặn an toàn "Lệnh phải tự tin mức cực điểm 95% mới hẵng dùng mực gán mác giả", chuỗi Self-Training cắn chắc bền vững chọc vớt kho tàng tri thức quý giá chìm dưới băng điểm mù không nhãn. Vượt xa khỏi rào cản chỉ lụi cụi trên xấp 10% khô hạn, biểu đồ đợt F1-Score đẩy nẩy điểm vọt tung trời xé xác đạp bằng cái bóng nhỏ nhen của mô hình lười cơ sở Supervised Base. Sự lấp xắp móc nối khối lượng "Mỏ dử liệu bỏ đi" lồng quy luật khép cấu thành sự vô giá tận thiên!
-- **Đại Họa Sập Hầm Sai Số Dịch Lây Lem (Error Decay):** Soi lại dòng trượt nếu AI lỡ thả lỏng tay buông Threshold tàn tạ rơi biên. Nó lóng ngóng khờ câm đè rập nhầm mạn máy gọt vẹt phớt qua xước nhỏ thổi phồng hỏng nhãn, rồi mang nó phết nhồi vào nồi tập lệnh xào lại Retrain... Gây xéo vặn ngã lật tung tóe tạo hệ luỵ sương mù. Dịch báo động dán nhãn sai nhấm nháp ăn sụp xưởng bằng hàng xe rác cảnh báo đinh óc trống trơn thực tiễn.
+2. Ở 10% nhãn:
+	- supervised_only: F1 = 0.1266
+	- self_training: F1 = 0.0000
+	- co_training: F1 = 0.1500
+	- label_spreading: F1 = 0.0652
 
-## 5. Tổng Kếp Tổng Quát và Kẻ Lấp Khuyến Nghị Thực Môn
-Học bán giám sát tạc đĩnh bản là "Phép thuật cấp cứu chân không" cứu vãn bài toán Label Sparsity cho hàng không mẫu hạm.
-- **Khuyến Nghị Lắp Móc Cổng Đẩy:** Buộc gắn nén chốt Thuật Toán Self-Training bọc chóp cho xâu chuỗi luồng nhận vạn dữ liệu thô khuyết danh mới đỗ bến. Kéo cồm kẹp cứng chốt cản chặn tự tin `Threshold = 0.95` tới răn ranh thép. Kế cắm một tấm lưới phao mành xen kỹ thuật **"Human-in-the-loop" (Vòng lặp tương tác kiểm duyệt Con Người)**: Đối với những ca số máy mấp mé bị lính AI dán báo động chọc biên vùng hoài nghi cộm cỡn hẹp (Tự tin rớt dưới tầm độ sát 70%), chặn băng vạch tống còi bảng báo văng ra mạn màn điều hành LED riêng lẻ. Đòi hỏi trực tiếp nhân công trưởng xưởng con người tiến hành ra nhồi xác minh đối soát phán định nốt ranh giới mốc sống còn chốt lọt!
+3. Ở 20% nhãn:
+	- supervised_only: F1 = 0.5902
+	- self_training: F1 = 0.3967
+	- co_training: F1 = 0.5312
+	- label_spreading: F1 = 0.1414
+
+4. Rủi ro pseudo-label của self-training:
+	- 5-10% nhãn: n_pseudo_positive = 0, miss rate = 1.0
+	- 20% nhãn: false alarm rate = 0.3721, miss rate = 0.8756
+
+Nhận xét nhanh:
+- Với cấu hình hiện tại, self-training chưa hiệu quả ở mức nhãn thấp.
+- Co-training cải thiện rõ so với self-training ở mức 10-20% nhãn, nhưng vẫn thấp hơn supervised_only tại 20% nhãn.
+
+## 4. Vì sao trong bài toán này Co-Training thường tốt hơn Self-Training?
+Đây là điểm quan trọng để tránh hiểu nhầm khi đọc bảng kết quả:
+
+1. Ở 5-10% nhãn, Self-Training gần như không gán được mẫu lỗi
+- Kết quả cho thấy self_training có `n_pseudo_positive = 0` và F1 = 0.
+- Nghĩa là mô hình quá bảo thủ, chủ yếu gán "normal", dẫn đến bỏ sót lỗi hàng loạt.
+
+2. Co-Training dùng cơ chế đồng thuận 2 "view" đặc trưng
+- Mẫu chỉ được gán nhãn giả khi cả 2 mô hình cùng dự đoán và cùng đủ tự tin.
+- Cơ chế này giúp giảm lan truyền nhãn giả sai, nên ở 10-20% nhãn Co-Training cho F1 cao hơn Self-Training.
+
+3. Vì sao có lúc Self-Training có thể nhỉnh hơn?
+- Khi tỷ lệ nhãn tăng cao (ví dụ vùng 75% trong learning curve), dữ liệu có nhãn đã đủ mạnh.
+- Lúc này lợi thế "lọc đồng thuận" của Co-Training giảm dần, trong khi Self-Training có thể tận dụng toàn bộ đặc trưng trong một mô hình duy nhất nên đôi khi nhỉnh nhẹ.
+
+Kết luận ngắn gọn:
+- Với cấu hình hiện tại và mức nhãn thấp-trung bình (<= 20%), Co-Training tốt hơn Self-Training.
+- Tuy nhiên baseline ổn định nhất cho production hiện vẫn là supervised_only.
+
+## 5. Ý nghĩa vận hành
+- Bán giám sát trong bộ dữ liệu này chưa đủ ổn định để dùng làm mô hình chính.
+- Khi nhãn quá ít, mô hình có xu hướng bảo thủ và bỏ sót nhiều lỗi.
+- supervised_only vẫn là lựa chọn an toàn hơn trong giai đoạn hiện tại.
+- co_training là phương án bán giám sát đáng cân nhắc hơn self_training khi cần thêm đường so sánh.
+
+## 6. Khuyến nghị hành động cụ thể
+1. Không dùng self-training cho production khi tỷ lệ nhãn < 15%.
+2. Chỉ cân nhắc bán giám sát khi đạt >= 20% nhãn và có giám sát rủi ro pseudo-label.
+3. Giữ supervised_only làm baseline cho kịch bản ít nhãn.
+4. Nếu bắt buộc dùng bán giám sát, ưu tiên co_training trước self_training trong cấu hình hiện tại.
+5. Áp dụng human-in-the-loop cho các mẫu có độ tự tin thấp để tích lũy nhãn thật.
+
+## 7. Câu nói chuẩn để dùng trong báo cáo
+"Tab Bán giám sát được dùng như kênh nghiên cứu khi thiếu nhãn; trong kết quả hiện tại, supervised-only vẫn ổn định hơn self-training ở mức nhãn thấp, do đó chưa khuyến nghị triển khai self-training làm mô hình production."

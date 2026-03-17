@@ -1,5 +1,5 @@
 """
-semi_supervised.py – Bán giám sát: Self-Training & Label Spreading.
+semi_supervised.py – Bán giám sát: Self-Training, Co-Training & Label Spreading.
 
 Kịch bản: Giữ lại p% nhãn (5/10/20%), phần còn lại coi là unlabeled.
 So sánh Supervised-only (ít nhãn) vs Semi-supervised.
@@ -225,6 +225,134 @@ class SemiSupervisedTrainer:
         self.results.append(result)
         return result
 
+    def train_co_training(
+        self,
+        X_train: np.ndarray,
+        y_train_true: np.ndarray,
+        y_train_semi: np.ndarray,
+        X_test: np.ndarray,
+        y_test: np.ndarray,
+        label_pct: float,
+    ) -> Dict:
+        """
+        Co-Training đơn giản theo 2 view đặc trưng.
+        - Chia feature thành 2 nửa (view1/view2)
+        - Hai classifier chỉ nhận mẫu pseudo-label khi dự đoán đồng thuận và đủ tự tin.
+        """
+        ct_params = self.params.get("semi_supervised", {}).get("co_training", {})
+        threshold = float(ct_params.get("threshold", 0.8))
+        max_iter = int(ct_params.get("max_iter", 15))
+        k_best = int(ct_params.get("k_best", 200))
+
+        n_features = X_train.shape[1]
+        mid = max(1, n_features // 2)
+        v1 = np.arange(0, mid)
+        v2 = np.arange(mid, n_features)
+        if len(v2) == 0:
+            v2 = v1
+
+        y_work = y_train_semi.copy()
+        pseudo_added_mask = np.zeros(len(y_work), dtype=bool)
+
+        for _ in range(max_iter):
+            labeled_mask = y_work != -1
+            unlabeled_idx = np.where(y_work == -1)[0]
+            if len(unlabeled_idx) == 0 or labeled_mask.sum() < 2:
+                break
+
+            clf1 = RandomForestClassifier(
+                n_estimators=120,
+                max_depth=8,
+                class_weight="balanced",
+                random_state=self.params["seed"],
+                n_jobs=-1,
+            )
+            clf2 = RandomForestClassifier(
+                n_estimators=120,
+                max_depth=8,
+                class_weight="balanced",
+                random_state=self.params["seed"] + 17,
+                n_jobs=-1,
+            )
+
+            clf1.fit(X_train[labeled_mask][:, v1], y_work[labeled_mask])
+            clf2.fit(X_train[labeled_mask][:, v2], y_work[labeled_mask])
+
+            p1 = clf1.predict_proba(X_train[unlabeled_idx][:, v1])
+            p2 = clf2.predict_proba(X_train[unlabeled_idx][:, v2])
+            y1 = np.argmax(p1, axis=1)
+            y2 = np.argmax(p2, axis=1)
+            c1 = np.max(p1, axis=1)
+            c2 = np.max(p2, axis=1)
+
+            agree = y1 == y2
+            confident = (c1 >= threshold) & (c2 >= threshold)
+            candidate_mask = agree & confident
+            if not np.any(candidate_mask):
+                break
+
+            cand_positions = np.where(candidate_mask)[0]
+            cand_scores = (c1[cand_positions] + c2[cand_positions]) / 2.0
+
+            if len(cand_positions) > k_best:
+                keep = np.argsort(-cand_scores)[:k_best]
+                cand_positions = cand_positions[keep]
+
+            chosen_idx = unlabeled_idx[cand_positions]
+            chosen_label = y1[cand_positions]
+
+            y_work[chosen_idx] = chosen_label
+            pseudo_added_mask[chosen_idx] = True
+
+        # Huấn luyện cuối cùng trên tập đã bổ sung pseudo-label
+        labeled_mask = y_work != -1
+        clf1 = RandomForestClassifier(
+            n_estimators=180,
+            max_depth=10,
+            class_weight="balanced",
+            random_state=self.params["seed"],
+            n_jobs=-1,
+        )
+        clf2 = RandomForestClassifier(
+            n_estimators=180,
+            max_depth=10,
+            class_weight="balanced",
+            random_state=self.params["seed"] + 17,
+            n_jobs=-1,
+        )
+        clf1.fit(X_train[labeled_mask][:, v1], y_work[labeled_mask])
+        clf2.fit(X_train[labeled_mask][:, v2], y_work[labeled_mask])
+
+        prob1 = clf1.predict_proba(X_test[:, v1])[:, 1]
+        prob2 = clf2.predict_proba(X_test[:, v2])[:, 1]
+        y_prob = (prob1 + prob2) / 2.0
+        y_pred = (y_prob >= self._decision_threshold()).astype(int)
+
+        metrics = self._compute_metrics(y_test, y_pred, y_prob)
+        result = {
+            "method": "co_training",
+            "label_pct": label_pct,
+            "n_labeled": int((y_train_semi != -1).sum()),
+            "n_pseudo_labeled": int(pseudo_added_mask.sum()),
+            "threshold": threshold,
+            "criterion": "agreement+confidence",
+            "k_best": k_best,
+            **metrics,
+        }
+
+        if pseudo_added_mask.any():
+            risk = self._analyze_pseudo_labels(
+                y_true_full=y_train_true,
+                y_semi_original=y_train_semi,
+                y_transduction=y_work,
+                unlabeled_mask=pseudo_added_mask,
+                label_pct=label_pct,
+            )
+            result.update(risk)
+
+        self.results.append(result)
+        return result
+
     def run_all_experiments(
         self,
         X_train: np.ndarray,
@@ -251,6 +379,9 @@ class SemiSupervisedTrainer:
 
             # Self-Training
             self.train_self_training(X_train, y_train, y_semi, X_test, y_test, pct)
+
+            # Co-Training
+            self.train_co_training(X_train, y_train, y_semi, X_test, y_test, pct)
 
             # Label Spreading
             self.train_label_spreading(X_train, y_semi, X_test, y_test, pct)
@@ -288,6 +419,7 @@ class SemiSupervisedTrainer:
                 f1 = f1_score(y_test, y_pred, zero_division=0)
                 curve_data.append({"pct": pct, "method": "supervised_only", "f1": f1})
                 curve_data.append({"pct": pct, "method": "self_training", "f1": f1})
+                curve_data.append({"pct": pct, "method": "co_training", "f1": f1})
                 curve_data.append({"pct": pct, "method": "label_spreading", "f1": f1})
             else:
                 y_semi = self.create_partially_labeled(y_train, pct, self.params["seed"])
@@ -299,6 +431,10 @@ class SemiSupervisedTrainer:
                 # Self-Training
                 r2 = self.train_self_training(X_train, y_train, y_semi, X_test, y_test, pct)
                 curve_data.append({"pct": pct, "method": "self_training", "f1": r2["f1"]})
+
+                # Co-Training
+                rct = self.train_co_training(X_train, y_train, y_semi, X_test, y_test, pct)
+                curve_data.append({"pct": pct, "method": "co_training", "f1": rct["f1"]})
 
                 # Label Spreading
                 r3 = self.train_label_spreading(X_train, y_semi, X_test, y_test, pct)

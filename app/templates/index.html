@@ -251,18 +251,18 @@
           <div class="overflow-x-auto" id="clf-table"></div>
         </div>
         <div class="md:col-span-2 neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">HEATMAP FN RATE THEO CLUSTER X TYPE (TEST)</h4>
-          <p class="text-xs text-neon-200/60 mb-3">Màu càng nóng nghĩa là tỷ lệ bỏ sót lỗi (FN rate) càng cao trong nhóm đó.</p>
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">HEATMAP FN RATE (TỶ LỆ BỎ SÓT LỖI) THEO CLUSTER X TYPE (TEST)</h4>
+          <p class="text-xs text-neon-200/60 mb-3">Màu càng nóng nghĩa là FN rate (tỷ lệ bỏ sót lỗi) càng cao trong nhóm đó.</p>
           <div id="chart-error-heatmap" style="height:520px"></div>
         </div>
         <div class="neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">FP-FN THEO CỤM MÁY (TEST)</h4>
-          <p class="text-xs text-neon-200/60 mb-3">Ưu tiên cụm có FN cao để tránh bỏ sót lỗi nghiêm trọng.</p>
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">FP (CẢNH BÁO GIẢ) - FN (BỎ SÓT LỖI) THEO CỤM MÁY (TEST)</h4>
+          <p class="text-xs text-neon-200/60 mb-3">Ưu tiên cụm có FN (bỏ sót lỗi) cao để tránh bỏ sót lỗi nghiêm trọng.</p>
           <div class="overflow-x-auto" id="error-cluster-table"></div>
         </div>
         <div class="neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">FP-FN THEO LOẠI SẢN PHẨM (TEST)</h4>
-          <p class="text-xs text-neon-200/60 mb-3">Phát hiện nhóm Type có false alarm cao để tinh chỉnh ngưỡng cảnh báo.</p>
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">FP (CẢNH BÁO GIẢ) - FN (BỎ SÓT LỖI) THEO LOẠI SẢN PHẨM (TEST)</h4>
+          <p class="text-xs text-neon-200/60 mb-3">Phát hiện nhóm Type có FP (cảnh báo giả) cao để tinh chỉnh ngưỡng cảnh báo.</p>
           <div class="overflow-x-auto" id="error-type-table"></div>
         </div>
         <div class="md:col-span-2 neon-card p-5">
@@ -450,7 +450,7 @@
 <!-- ═══════════════════════════════════════════════ -->
 <!-- JAVASCRIPT -->
 <!-- ═══════════════════════════════════════════════ -->
-<script src="/static/app.js?v=20260318_6"></script>
+<script src="/static/app.js?v=20260318_7"></script>
 
 </body>
 </html>

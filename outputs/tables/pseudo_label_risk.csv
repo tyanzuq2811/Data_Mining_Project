@@ -1,4 +1,7 @@
 label_pct,n_unlabeled,n_true_failures_unlabeled,n_pseudo_positive,n_pseudo_negative,pseudo_tp,pseudo_fp_false_alarm,pseudo_fn_missed_failure,pseudo_precision,pseudo_false_alarm_rate,pseudo_miss_rate_on_unlabeled_failures
 0.05,7601,258,0,7601,0,0,258,0.0,0.0,1.0
+0.05,3000,27,0,3000,0,0,27,0.0,0.0,1.0
 0.1,7201,244,0,7201,0,0,244,0.0,0.0,1.0
+0.1,3000,3,0,3000,0,0,3,0.0,0.0,1.0
 0.2,6401,217,43,6358,27,16,190,0.6279,0.3721,0.8756
+0.2,3000,1,0,3000,0,0,1,0.0,0.0,1.0

@@ -163,16 +163,34 @@ async function loadClassification() {
 
   const errClusterEl = document.getElementById('error-cluster-table');
   if (errClusterEl) {
+    const errClusterLabeled = Array.isArray(errCluster)
+      ? errCluster.map(r => ({
+          cluster: r.cluster,
+          'FP (canh bao gia)': r.fp,
+          'FN (bo sot loi)': r.fn,
+          'FN rate (ty le bo sot loi)': r.fn_rate_on_actual_failures,
+          n_samples: r.n_samples,
+        }))
+      : [];
     errClusterEl.innerHTML = Array.isArray(errCluster) && errCluster.length
-      ? neonTable(errCluster, 'fn')
-      : '<p class="text-neon-300/40 text-sm">Chưa có dữ liệu FP/FN theo cụm.</p>';
+      ? neonTable(errClusterLabeled, 'FN (bo sot loi)')
+      : '<p class="text-neon-300/40 text-sm">Chưa có dữ liệu FP (canh bao gia) / FN (bo sot loi) theo cụm.</p>';
   }
 
   const errTypeEl = document.getElementById('error-type-table');
   if (errTypeEl) {
+    const errTypeLabeled = Array.isArray(errType)
+      ? errType.map(r => ({
+          product_type: r.product_type,
+          'FP (canh bao gia)': r.fp,
+          'FN (bo sot loi)': r.fn,
+          'FN rate (ty le bo sot loi)': r.fn_rate_on_actual_failures,
+          n_samples: r.n_samples,
+        }))
+      : [];
     errTypeEl.innerHTML = Array.isArray(errType) && errType.length
-      ? neonTable(errType, 'fn')
-      : '<p class="text-neon-300/40 text-sm">Chưa có dữ liệu FP/FN theo loại sản phẩm.</p>';
+      ? neonTable(errTypeLabeled, 'FN (bo sot loi)')
+      : '<p class="text-neon-300/40 text-sm">Chưa có dữ liệu FP (canh bao gia) / FN (bo sot loi) theo loại sản phẩm.</p>';
   }
 
   const heatmapEl = document.getElementById('chart-error-heatmap');
@@ -198,8 +216,8 @@ async function loadClassification() {
       const textMatrix = clusterSet.map(cl =>
         typeSet.map(tp => {
           const row = rows.find(r => String(r.cluster) === cl && String(r.product_type) === tp);
-          if (!row) return 'FN: 0<br>FP: 0<br>Samples: 0';
-          return `FN: ${Number(row.fn)}<br>FP: ${Number(row.fp)}<br>Samples: ${Number(row.n_samples)}`;
+          if (!row) return 'FN (bo sot loi): 0<br>FP (canh bao gia): 0<br>Samples: 0';
+          return `FN (bo sot loi): ${Number(row.fn)}<br>FP (canh bao gia): ${Number(row.fp)}<br>Samples: ${Number(row.n_samples)}`;
         })
       );
 
@@ -214,9 +232,9 @@ async function loadClassification() {
         hovertemplate:
           'Type: %{x}<br>' +
           'Cluster: %{y}<br>' +
-          'FN rate on actual failures: %{z:.3f}<br>' +
+          'FN rate (ty le bo sot loi) on actual failures: %{z:.3f}<br>' +
           '%{text}<extra></extra>',
-        colorbar: { title: 'FN rate' },
+        colorbar: { title: 'FN rate (ty le bo sot loi)' },
       }], getLayout({
         height: 520,
         margin: { l: 70, r: 30, t: 20, b: 60 },
@@ -686,7 +704,12 @@ async function loadSemiSupervised() {
     fetch(API + '/api/results/pseudo_label_risk').then(r => r.json()),
   ]);
   const methods = [...new Set(data.map(r => r.method))];
-  const colors = { supervised_only: '#00bfff', self_training: '#00ff88', label_spreading: '#ffd60a' };
+  const colors = {
+    supervised_only: '#00bfff',
+    self_training: '#00ff88',
+    co_training: '#f97316',
+    label_spreading: '#ffd60a'
+  };
   const traces = methods.map(m => {
     const subset = data.filter(r => r.method === m);
     return {

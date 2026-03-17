@@ -1,19 +1,21 @@
 ============================================================
-INSIGHTS & KHUYẾN NGHỊ HÀNH ĐỘNG
+INSIGHTS & KHUYẾN NGHỊ HÀNH ĐỘNG (BẢN ĐỊNH LƯỢNG)
 ============================================================
 
-1. ƯU TIÊN BẢO TRÌ THEO CỤM: Các cụm có failure rate cao (cluster profiling) nên được kiểm tra thường xuyên hơn. Đặc biệt máy thuộc cụm có tool wear cao + torque cao cần lịch bảo trì dày hơn (giảm từ 30 ngày → 15 ngày).
+1. MÔ HÌNH PHÂN LỚP ĐỀ XUẤT TRIỂN KHAI: Gradient Boosting đang là lựa chọn cân bằng nhất với F1=0.8413, Precision=0.9138, Recall=0.7794, PR-AUC=0.8461; trên tập test gồm 68 lỗi thực tế mô hình bắt được 53 lỗi (FN=15, FP=5). Khuyến nghị dùng làm model production baseline và theo dõi tần suất FN hằng tuần.
 
-2. GIÁM SÁT TEMP_DIFF: Khi chênh lệch nhiệt độ (Process - Air) < 8.6K kết hợp tốc độ quay < 1380 rpm → nguy cơ Heat Dissipation Failure cao. Lắp cảnh báo realtime cho điều kiện này.
+2. CHỈ SỐ VẬN HÀNH CHÍNH KHI GIÁM SÁT MODEL: Dataset có tỷ lệ lỗi 3.39% nên Accuracy cao không đủ để kết luận. Khuyến nghị chốt KPI production theo thứ tự: (1) F1, (2) Recall, (3) PR-AUC; đặt ngưỡng cảnh báo tái huấn luyện nếu Recall < 0.75 hoặc F1 < 0.80.
 
-3. NGƯỠNG TOOL WEAR: Tool wear > 200 phút kết hợp torque > 50 Nm → nguy cơ Overstrain Failure. Khuyến nghị thay dụng cụ khi tool wear đạt 180 phút (buffer 20 phút an toàn).
+3. ƯU TIÊN GIẢM FN THEO NHÓM SẢN PHẨM: Nhóm Type H đang có FN rate trên lỗi thực tế cao nhất (0.60), tiếp theo Type M (0.24) và Type L (0.1579). Khuyến nghị giảm threshold riêng cho Type H để tăng Recall và bố trí kiểm tra thủ công bổ sung cho các máy Type H trong ca vận hành tải cao.
 
-4. SỬ DỤNG PR-AUC THAY VÌ ACCURACY: Do dataset imbalanced (3.39% failure), accuracy >96% nhưng vô nghĩa. PR-AUC phản ánh đúng khả năng phát hiện lỗi. Đề xuất dùng PR-AUC làm metric chính trong production.
+4. ƯU TIÊN BẢO TRÌ THEO CỤM MÁY: Cụm 1 có failure rate 33.33% (2/6) cao gấp khoảng 12.4 lần cụm 0 (2.69%). Khuyến nghị xếp cụm 1 vào mức "critical watchlist", rút ngắn chu kỳ kiểm tra (ví dụ 15 ngày thay vì 30 ngày) và áp dụng checklist torque/tool wear bắt buộc trước khi giao ca.
 
-5. POWER MONITORING: Công suất (Torque × Speed) ngoài khoảng [3500, 9000]W → Power Failure. Thiết lập dashboard giám sát power realtime với cảnh báo khi vượt ngưỡng.
+5. LUẬT KẾT HỢP CÓ TÁC ĐỘNG MẠNH NHẤT: Rule "Air_temp high + Process_temp normal + Speed low -> Machine failure" có Lift=10.37 (Support=0.009, Confidence=0.3516). Khuyến nghị đưa rule Lift>7 vào cảnh báo sớm cấp 2 (warning), Lift>10 vào cảnh báo cấp 1 (critical).
 
-6. SEMI-SUPERVISED KHI ÍT NHÃN: Khi chỉ có 5-10% nhãn failure, Self-Training với threshold 0.95 cải thiện F1 so với supervised-only. Tuy nhiên cần kiểm soát false positive (false alarm) kỹ để tránh bảo trì thừa.
+6. BẤT THƯỜNG CHỈ NÊN DÙNG LÀM TĂNG CƯỜNG GIÁM SÁT: Isolation Forest đạt F1=0.354 (Precision=Recall=0.354), LOF F1=0.1976; do đó anomaly module chưa đủ mạnh để thay thế classifier. Khuyến nghị dùng anomaly như lớp "pre-screen" ưu tiên điều tra, không dùng làm quyết định dừng máy độc lập.
 
-7. SẢN PHẨM TYPE L RỦI RO CAO HƠN: Product type L (Low quality) có failure rate cao hơn type H và M. Nên tăng tần suất kiểm tra cho sản phẩm type L, đồng thời xem xét nâng cấp quy trình sản xuất cho nhóm này.
+7. BÁN GIÁM SÁT CẦN CHỌN ĐÚNG PHƯƠNG PHÁP: Tại 5-10% nhãn, self_training cho F1=0, trong khi co_training đạt F1=0.0290 (5%) và 0.1500 (10%). Tại 20% nhãn, supervised_only vẫn tốt nhất (F1=0.5902), co_training đứng thứ hai (F1=0.5312), self_training thấp hơn (F1=0.3967). Khuyến nghị không dùng self_training khi nhãn <15%; nếu bắt buộc dùng bán giám sát thì ưu tiên co_training, nhưng baseline production vẫn nên là supervised_only.
+
+8. HỒI QUY/CHUỖI THỜI GIAN: Regression hiện tại R2~0.079 (chưa đạt mức sử dụng vận hành), nhưng mô hình chuỗi thời gian GBR_lag_features đạt MAE=4.9306, RMSE=23.4048, R2=0.8625 vượt xa ARIMA (MAE=54.5115, RMSE=62.9723). Khuyến nghị dùng GBR_lag cho dự báo xu hướng ngắn hạn, đồng thời tạm thời không đưa regression thường vào quy trình ra quyết định đến khi nâng được R2.
 
 ============================================================

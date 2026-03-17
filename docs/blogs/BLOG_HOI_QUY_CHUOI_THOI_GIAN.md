@@ -1,35 +1,42 @@
-# Series Blog: Khám Lộ Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 5: Hồi Quy (Regression) & Chuỗi Thời Gian (Time-Series Forecasting)
+# Series Blog: Khám Phá Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 5: Hồi Quy (Regression) & Chuỗi Thời Gian (Time-Series)
 
-## 1. Giới Thiệu: Đỉnh Cao Phán Quyết Định Lượng Của Hệ Dự Đoán Hảo Hạng
-Suốt dọc 4 kỳ công đoạn trải mạn trước, hệ thống máy học chỉ phân định xoáy lật nhiệm vụ trắc nghiệm trạng thái mang tính Loại Biệt Mệnh Đề Rời Rạc (Discrete/Categorical): Gá lệnh "Còn Chạy Êm Ả (0)" hay "Chuẩn Bị Bung Hỏng (1)". 
-Tuy thế, với các Giám Đốc Điều Phối Xưởng, họ gào thét cắn nuốt khao khát một thông số dội bão táp trực diện và rành mạch bằng vệt đo Định Lượng Tuyệt Đối (Continuous Prediction) biểu danh khái niệm **RUL (Remaining Useful Life - Định Thức Tuổi Thọ Chạy Hữu Dụng Còn Sót Lại)**. Câu hỏi nã trút xuống: *"Khoan gạt hỏng hay sống! Hãy xuất xạch cho tôi CHÍNH XÁC KHOẢNG MẤY PHÚT, MẤY GIỜ đồng hồ tíc-tắc tiếp thết thì Trục Lõi Dao Khoan bị nghiền nát đứt đoạn?"*.
-Bẻ thẳng mũi dáo chuyển vế, thuật toán dự báo Hồi Quy (Regression Models) đâm xoạc xuất trận phục vụ giải tích tuyến tính. Vươn rễ cao hơn, chắp luồn lác mảnh dữ liệu trôi nổi thành một đai băng xích chuyển không gián đoạn dọc cuộn biến thiên dòng chảy thời gian móc neo đằng trước, bài toán gieo hạt gánh định dớp mang tên **Dự Báo Chuỗi Thời Gian (Time-Series Forecasting)** rực sáng!
+## 1. Mục tiêu của tab này
+Tab Hồi quy/Chuỗi thời gian dùng để trả lời câu hỏi định lượng:
+- Giá trị sẽ là bao nhiêu?
+- Xu hướng sắp tới tăng hay giảm?
 
-## 2. Giải Phẫu Cơ Hồ Thuật Toán Lõi Và Bộ Tham Số Kỹ Ngành
-Sự mài mòn, rạn vỡ kết cấu là một biểu thức của sức bào lũy kế tịnh tiến vươn mốc (Degradation Process), chứ không rách vọt một cái chết nháy. Sự xước gãy hôm nay cõng rát dư chấn tải của ngày hôm qua.
+Đây là tab phục vụ dự báo định lượng và hỗ trợ lập kế hoạch bảo trì theo thời điểm.
 
-### 2.1. Nắm Thóp Cấu Trúc Khung Khảo Sát Tự Hồi Quy ARIMA
-- **Kiến trúc vĩ mô:** ARIMA (AutoRegressive Integrated Moving Average) là đai võ thống kê kinh điển của chuỗi thời gian, định mức sự ảnh hưởng rập liên đới của vệt dao động dĩ vãng lên biến vạch tương lai. Thuật toán là sự nín cấu trút lại của 3 trục số hiệu chỉnh cộm cán tinh tế từ bậc nghệ nhân đo thủ công học `(p, d, q)`:
-  - **TỰ HỒI QUY (AR - Auto-Regressive) ứng tham số `p`:** Đo sức phụ thuộc hồi quy trực nhập của chỉ số dự điểm theo lượng lùi bậc thời gian quá khứ (Lag/Bước trễ thời gian). 
-    - *Diễn giải:* Chân lý nghệ nhân già "Bệnh lò đun nung sáng nay nguyên rễ do dư hỏa luộc kìm quạt trưa qua". Quắp chặt `p=2`, AI móc tụt gáy ngó trân trối bộ đo nhiệt của kíp 2 tiếng vừa đi qua làm bản nháp tính lóng tạc khung đồ thị bốc đầu sức nóng cho kíp số 3 tiếp nối.
-  - **SỰ LẤY SAI PHÂN TÍCH HỢP (I - Integrated) ứng tham số `d`:** Trình thức cạo trượt độ chênh lệch nhằm làm nhào bóc cái xu hướng nhịp biến (Trend) ép đẩy vệt sóng chạy thoi thóp về đặc tính Dừng Phẳng (Stationary Data).
-    - *Diễn giải:* Cỗ quay xoắn trớn không thèm ì tại mốc điểm đứng một chổ! Nó mang lực tốc rít kéo. Trục số `d` từ sát chối bỏ việc gằn đút "Đang nhả đạt độ bao nhiêu C". Nó cạy bốc tróc tốc độ nẩy vọt (Gia Tốc Văng - Tăng bao lượng nhiệt nhấp lên xế hơn với điểm nốc cũ). Gạt là ủi bẵng xu thế tăng bốc giả tạo, trơ trọi cái ngịp rung phập phồng lõi hỏng ngầm.
-  - **CỘNG TRUNG BÌNH TRƯỢT (MA - Moving Average) ứng tham số `q`:** Đo sai số rớt dôi tính từ thuật hiệu chỉnh bù trừ những cú sốc đâm tạt bất thình lình (Random Shocks).
-    - *Diễn giải:* Lọc rây triệt đệm mảng xóc giật búa bổ trời táng (Ví dụ: Sự cố giật mạch điện áp hở cắm dăm giây cản lướt tốc vòng tua đứt đà). Khung lọc lỗi `q` bọc đan cài nén bù lại những lỗi lỡ sóng đánh tạt ngang này khỏi làm bộ số dự báo văng vót xé biên vọt điên loạn.
+## 2. Cách đọc chỉ số
+- MAE: sai số tuyệt đối trung bình, càng thấp càng tốt.
+- RMSE: giống MAE nhưng phạt mạnh lỗi lớn, càng thấp càng tốt.
+- R2: mức độ giải thích biến thiên, càng gần 1 càng tốt.
+- AIC/BIC: tiêu chí chọn mô hình chuỗi thời gian, càng thấp càng tốt trong cùng bài toán.
 
-### 2.2. Điểm Số Đánh Trượt Xử Án Bạo Chủng (Evaluation Metrics)
-- **Sai Số Trung Bình Toàn Phương (MSE - Mean Squared Error):** Hình phạt bạo lót. Điểm rớt ngắc ngoải RUL mòn răng khoan móc ở vị trí "10 phút", bệ phóng khờ khảo học lỏm văng miệng chệch dự dốc "8 phút chết". Rớt lệch `(10 - 8) = 2`. Máy giáng phạt áp roi bình phương `2^2 = 4 (Phạt Nặng Điểm Khối)`. Chiến dịch của hệ Neural Network lún chuội ép bọc thuật toán phải dốc lực Tối Thiểu Hóa Kịch Sàn (Minimize) cục điểm tạ tội hình phạt MSE đày lao về vùng Không Không.
-- **Hệ Số Phân Rã Giải Định (R-squared / R2):** Tuyên dương đỉnh phơi bày độ tương thích! Số tỷ phần sự chênh lệch đo rẽ của mảng Tín Hiệu Đầu Ra Mục Tiêu (Variance of Target) đã bị nạy trần giải bày tường tận bởi khối các mảng Feature biến cố Đầu Vào. Đệm hỏa đạt `R2 = 0.82`, vỗ tay loa trần văng màng: "Chính cội 82% ngọn rễ nát bốc thắt bẻ quẹo mẻ gãy cái răng xoay đó bị cởi khóa phanh lột từ nhịp cuồng lực kéo vặn Torque và vòng Tua!". 
+## 3. Kết quả định lượng chính
+### 3.1. Hồi quy thường
+- random_forest_reg: MAE=53.3288, RMSE=62.7010, R2=0.0791
+- xgboost_reg: MAE=52.9623, RMSE=62.7075, R2=0.0790
+- gradient_boosting_reg: MAE=53.0351, RMSE=62.7276, R2=0.0784
 
-## 3. Khai Lộ Chóp Trận Thí Nghiệm Tuyến Dự Án Bắn Máy RUL Rực Đỏ
-- **Thay Kẹp Trút Đạn RUL Regression:** Di tản mô hình thuật bọc Random Forest Regressor chĩa họng tiêu cắm xoáy đúng trọng tâm biến chỉ báo hao mòn `Tool Wear [min] (Mài mòn theo phút tính)`. Rút phăng ném văng phân hệ chẩn nhãn phân lớp Binary (Class hỏng / hay ko Hỏng). Ép nén phọt nòng trút lực cường quay ngầm `Torque` gộp chập `RPM` gồng tra gào ép bắt khai AI phải tính rặn định được cỗ số Phút Dao Gãy bết vụn là vạch đồng hồ số nào.
-- **Dàn Vệt Chạy Xéo Mô Phỏng (Time-Series Smoothing):** Hất tung khay tạp dữ liệu rác rối loạn hỗn tạp, người thực lệnh bưng ban trải lại lót nẹp xéo 100 ngàn điểm tích chuỗi cày máy miết mệt trườn vắt không dừng. Phóng nội soi vệt nối uốn nén dải nhiệt khí lưu chênh lên xuống `Temp_diff` bứt chân xé rào bốc ngút ngàn.
+Nhận xét: R2 khoảng 0.079 là thấp, chưa đủ tin cậy để đưa vào quyết định vận hành.
 
-## 4. Thu Thập Quyền Chấn Báo Cáo Insight Giải Mã Lịch Sử
-Giật báo cáo bung lụa khỏi đường file xử kết tụ chói lòa:
-- **Tập Bức Tường Lực Chắn Đập Năng Lượng Nén (Power Feature Engine):** Sự ghép mảnh hai mảng cột lẻ phế trôi tuột, Toán Học sinh đẻ con giao lai thần quái: `Năng lực tạo đẩy (Power) = Toán gộp (Lực cuộn vặn Torque × Độ rít vòng xoay Rotational Speed)`. Thần số mọc ngoác ra một biểu lượng chấn bạo. Hệ chằng Random Forest báo còi rực rống xé đỏ rào: Mỗi phảy khi cái đà Đẩy Năng (Power) văng trượt văng ném lọt chệch thảm ra chuồng giam tử thủ an toàn `[3500, 9000] W` --> Giây đấy khắc đó... Đầu trục báo hao mòn kim mũi Tool Wear chốc ngả vút cắm mút thẳm đâm lao dốc như cắm đầu vỡ văng phế liệu (OSF bùng xác). Điểm tin cậy R-Squared R2 khảm chứng bảo hộ uy lực này.
-- **Sóng Vây Báo Nhiệt Lết Chậm (Thermal Time-Series Slope):** Đo cuộn dây dòng phác nội suy kéo chân tản dội lờ lạnh ngực: Tử bệnh lỗi Thất Thoát Tản Nhiệt Bức Khí bốc lửa vốn chẳng cắn chốt đứt sập dây ngay kịch điểm nháy cháy đèn! Sức nhiệt thảm lết bò vương uốn mảng rã lười. Cán nhịp thuật đẩy trượt máng ép số `Temp_diff` thu hẹp chết cứng bó gọng vòng ranh nhạt dưới 8.6K. Hệ thống Time-Series bóp nọc quặp ngay cổ đo lường đánh bay cái dớp HDF thiu lụn đứt đà!
+### 3.2. Chuỗi thời gian
+- ARIMA(2,1,2): MAE=54.5115, RMSE=62.9723, AIC=73044.33, BIC=73079.26
+- GBR_lag_features: MAE=4.9306, RMSE=23.4048, R2=0.8625
 
-## 5. Tổng Hành Kết Dịch & Dập Pháo Lời Cáo Chung Dashboard Tột Điểm
-- **Khai Triển Biển Kẹp Rút Máu Dashboard Tương Lai Thật Đảo Vận Cảnh:** Hệ số nội hồi RUL Reggression chích xuất luồn điện phanh thét chạy xâu vắt thắt lồng kính đếm ngược chuỗi đèn Led trạm gác lồng điều hành (RUL Dashboard Live). Khi dải biên tuyến đường viền gồng nhiệt "Temp_diff" chúc mỏ chọc hạ tuột máng dộng móc cái càng chết chóc 8.6K. Con quái AI rúc còi phán một lệnh thét tột kinh: *"Dẹp tuột! Triệu quân bưng gỡ vứt mảng cụm bộ cưa răng cắt này lập tắp! Cấp báo chủ chóp đốc đỉnh, ngài sót rụng chính trực **20 Phút Trót Tua Sinh Mệnh Cuối Vòng** hãm phanh lại trước lúc chạm vạch định 200 min sẽ táng banh chành gãy vỡ khét lẹt nguyên trục dàn xưởng thép!"*.
-- **Thiết Bảng Chống Khoán Đại Mạch Truyền Cảm (Predictive Maintenance Epic Finale):** Cáo lệnh thu ạc xếp trọn vẹn dải Series gồm Khởi động vạch EDA (Xong), Chôn Cụm dị đồi (Clustering) cõng kết cấu Lây Lan Tương Tính (AR) mạ qua nòng Vớt phân biệt chót đai Time-Series Tiên Tri Tuyến Tính. Vị thế Mảng AI Cứu Trợ Thiết Bị Nhà Xưởng (AI for Pre-Maintenance) đanh thép đạp bóp cổ những lập ngôn coi dữ liệu khô là chốn hốc mọt phòng Lab hàn lâm! Giới thiết chứng tỏ bằng vũ lực vặt đứt Hàng Giọt Tỉ Đô-Lau Xót Thiệt Kinh Khí văng phí của cái kỷ nguyên băng rền Công Nghiệp Băng Sắt Xứ Chân Trần Thức Tỉnh Trực Chiến Ảo! Tri vinh cảm khái tới nền kiến thiết Tương Lai Cơ Khí Tự Trị !
+Nhận xét: GBR_lag_features vượt trội rõ rệt cho dự báo ngắn hạn.
+
+## 4. Ý nghĩa vận hành
+- Hồi quy thường hiện mới mang tính tham khảo phân tích.
+- Mô hình chuỗi thời gian với feature trễ đang đủ tốt để hỗ trợ cảnh báo xu hướng ngắn hạn.
+- Có thể kết hợp với tab Phân lớp: phân lớp báo "có nguy cơ", chuỗi thời gian báo "mức độ và xu hướng".
+
+## 5. Khuyến nghị hành động cụ thể
+1. Dùng GBR_lag_features làm mô hình dự báo xu hướng ngắn hạn.
+2. Chưa triển khai regression thường vào quyết định sản xuất cho đến khi nâng R2 lên mức mục tiêu.
+3. Thiết lập theo dõi drift theo tuần (MAE, RMSE) để phát hiện suy giảm chất lượng.
+4. Ưu tiên bổ sung đặc trưng theo thời gian và cửa sổ trễ để tăng độ chính xác.
+
+## 6. Câu nói chuẩn để dùng trong báo cáo
+"Tab Hồi quy/Chuỗi thời gian cung cấp mô hình dự báo định lượng và xu hướng; trong kết quả hiện tại, mô hình chuỗi thời gian với đặc trưng trễ cho chất lượng tốt hơn rõ rệt và phù hợp hơn cho hỗ trợ quyết định ngắn hạn."
