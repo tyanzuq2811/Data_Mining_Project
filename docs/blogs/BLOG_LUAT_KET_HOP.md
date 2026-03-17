@@ -1,32 +1,30 @@
-# Series Blog: Khám Phá Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 1: Luật Kết Hợp
+# Series Blog: Khám Phá Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 1: Luật Kết Hợp (Association Rules)
 
-## 1. Giới Thiệu
-### Ý tưởng cực dễ hiểu (Liên kết các hiện tượng)
-Khai phá luật kết hợp (Association Rules) giống như việc chủ siêu thị phân tích thói quen mua sắm: "Hễ ai mua sách vở và bút bi thì 80% sẽ mua thêm tẩy". Trong hệ thống máy móc (Predictive Maintenance), chúng ta tìm những "kết hợp" chết người: "Nếu **Nhiệt độ máy cao** VÀ **Tốc độ quay thấp**, thì liệu máy có bị **hỏng** không?". 
+## 1. Giới Thiệu: Khai Phá Quy Luật Tương Quan
+Khai phá **Luật kết hợp (Association Rules Learning)** là một kỹ thuật phân tích dựa trên luật (Rule-based Machine Learning) để khám phá ra các quy luật tương quan ẩn sâu giữa các biến số trong một tập dữ liệu lớn. Kỹ thuật này nổi tiếng nhất với bài toán "Phân tích Giỏ hàng" (Market Basket Analysis) trong bán lẻ - "Khách mua bỉm thường mua thêm bia".
+Tuy nhiên, trong bối cảnh công nghiệp và **Bảo trì dự đoán (Predictive Maintenance)**, các kỹ sư ứng dụng kỹ thuật này để tìm ra hiện tượng "Domino của sự cố hỏng hóc". Hiệu ứng lây lan này có thể là: "Nếu máy đang bị lỗi Quá tải (OSF), thì xác suất rất cao sẽ kéo theo lỗi Tản nhiệt (HDF) làm phá hủy hệ thống".
 
-## 2. Giải Thích Thuật Toán & Các Tham Số (Kèm Ví Dụ Trực Tiếp Từ Bộ AI4I)
-Thuật toán làm việc này tên là **Apriori** hoặc **FP-Growth**. Chúng quét 10,000 dòng lịch sử máy móc trong bộ AI4I để tìm ra các "cặp sự cố" luôn đi chung với nhau. Để lọc bỏ sự trùng hợp ngẫu nhiên, ta dùng 3 lăng kính kiểm duyệt:
+## 2. Giải Thích Thuật Toán Đặc Tiêu: Apriori & FP-Growth
+Việc phải quét qua hàng vạn dòng lịch sử để tìm các tổ hợp trạng thái bệnh lý là một bài toán tốn cực kỳ nhiều chi phí tính toán (Computational complexity). Hai thuật toán tối ưu tiêu biểu được sử dụng:
+- **Thuật toán Apriori:** Hoạt động dựa trên nguyên lý "Cắt tỉa nhánh tĩnh" (Pruning). *Diễn giải:* Giống như một anh thợ đi kiểm tra lỗi, nếu anh ta thấy việc "Mòn dao (TWF)" đứng một mình vốn dĩ đã hiếm khi xảy ra, anh ta sẽ lập tức loại bỏ việc xét xem "Mòn dao kết hợp với hỏng cầu chì thì sao" để tiết kiệm thời gian.
+- **Thuật toán FP-Growth (Frequent Pattern Growth):** Tinh vi hơn, nó nén cơ sở dữ liệu lại thành một cây tần suất cấu trúc bộ nhớ (FP-Tree). *Diễn giải:* Các lỗi hay đi sát với nhau tạo chung một nhánh dẫn, thuật toán chỉ cần duyệt qua các nhánh cây gia phả này mà không cần càn quét lặp lại rà từng dòng dữ liệu vòng quanh (Database Scanning).
 
-- **Support (Độ phổ biến):** Tỷ lệ một sự kiện xuất hiện trên tổng số 10,000 lần máy chạy. 
-  *Ví dụ từ AI4I:* Trong xưởng có hiện tượng "Máy bị quá tải" (OSF) xuất hiện. Nhưng chỉ có mòn dao (Tool Wear) > 200 phút và Lực vặn (Torque) > 50 Nm xuất hiện đồng thời trong 98 dòng (98/10000). Vậy Support của quy luật này là `~0.98%`.
-- **Confidence (Độ tự tin/Độ chắc chắn):** Tính tỷ lệ phần trăm chắc chắn điều kiện B sẽ theo sau điều kiện A.
-  *Ví dụ từ AI4I:* Nếu BIẾT CHẮC CỤ THỂ một cái máy đang có mũi khoan mòn > 200 phút và Torque > 50 Nm, hỏi xác suất cái máy đó văng miểng do OSF là bao nhiêu? Trong dữ liệu trả về, xác suất này (Confidence) lên tới `85%`.
-- **Lift (Mức độ nhân quả/ Cường độ hút):** Cho biết quy luật này là do nguyên nhân - kết quả thật sự, hay là ngẫu nhiên vớ vẩn.
-  *Ví dụ từ AI4I:* Có phải Việc mũi khoan bị mòn thực sự GÂY RA máy hỏng nặng, hay vì trong xưởng ngày hôm nay có tỷ lệ xui xẻo máy hỏng quá nhiều? Thuật toán tính ra vạch Lift của luật này > 50. (Bất kỳ chỉ số Lift > 1 nào nghĩa là chúng cộng hưởng sinh mệnh với nhau).
+## 3. Các Chỉ Số Cốt Lõi (Metrics) Đánh Giá Độ Tin Cậy
+Một bộ luật tự động sinh ra như: `{Nhiệt độ Process cao, Tốc độ chập chờn} -> {Lỗi Tản Nhiệt HDF}` luôn phải được thẩm định qua 3 lăng kính Thống Kê:
 
-## 3. Thiết Lập Thí Nghiệm & Thông Số Trong Dự Án (AI4I 2020)
-Dự án của chúng ta gặp một thách thức thực tế lớn: Lỗi máy móc rất hiếm khi xảy ra. Tổng số lỗi chỉ chiếm **3.39%** (339 dòng trên 10,000 dòng). Nếu lỗi quá ít, hệ thống rất dễ bỏ qua.
-- **Chiến thuật (Tiền xử lý):** Phân nhóm (Binning) để gom tốc độ số cực lẻ thành "Thấp, Trung bình, Cao".
-- **Tham số `min_support` = 0.01 (1%):** Cực kỳ quan trọng! Ta bắt buộc ép tỷ lệ phổ biến cực thấp xuống độ ngưỡng. Lý do: nếu ta đợi một hiện tượng lỗi đạt 5% sự cố mới thèm chú ý, thì vĩnh viễn AI sẽ câm như hến vì "Toàn bộ máy hỏng của nguyên một nhà máy gom lại mới được 3.39% chứ đâu ra 5%!". Do đó phải nhích cái ngưỡng này bé xíu xuống `0.01` (1%).
-- **Tham số `min_confidence` = 0.5 (50%):** Nghĩa là khi một tổ hợp hoàn cảnh (ví dụ: Nhiệt độ Process cao) xuất hiện, ta yêu cầu phải báo cáo cho kỹ sư là máy MỚI chắc chắn > 50% sắp nổ.
-- **Tham số `min_lift` > 1:** Ép mọi quy luật phải có sức nặng thực sự.
+### 3.1. Support (Độ Phổ Biến / Độ Hỗ Trợ)
+- **Thuật ngữ:** Tỷ lệ phần trăm các điểm dữ liệu (Transactions/Records) xuất hiện cả hai hiện tượng X và Y trên tổng toàn bộ dữ liệu. `Support(X, Y) = Freq(X, Y) / N`
+- **Diễn giải:** Trong xưởng 10.000 mẻ máy chạy, có 100 lần diễn ra sự trạng thái máy "Vừa nhiệt cao, vừa nhảy tốc độ, vừa hỏng quạt". Support = `100 / 10000 = 1%`. Tham số `min_support` thường được cài cực kỳ thấp vì các tổ hợp gây lỗi bản chất vốn rất hiếm so với thời gian chạy bình thường của nhà máy.
 
-## 4. Kết Quả Tổng Quan
-Nhờ ép các tham số siêu nhỏ trên, thuật toán Apriori đã lôi cổ 2 hiện tượng nguy hiểm nhất từ bảng số liệu:
-- **Nguy cơ OSF (Overstrain Failure) cực độ:** Khi `Tool wear > 200` phút CỘNG VỚI lực vặn dao `Torque` ở mức Cao (> 50 Nm), bộ luật tính toán ngay lập tức đẩy *Lift* lên trên 10. Đây là dấu hiệu chắc nịch của sự nhồi nhét quá tải vỡ thiết bị.
-- **Nguy cơ HDF (Heat Dissipation Failure) nổ máy:** Tưởng là chênh lệch nhiệt thấp là máy mát, nhưng khi nhìn vào bảng `insights`, `Temp_diff` < 8.6K KẾT HỢP VỚI `Tốc độ quay` rất chậm (< 1380 rpm) lại chỉ ra luồng không khí chẳng thèm lấy đi hơi nóng chết chóc. Độ tự tin (Confidence) rằng máy chuẩn bị bốc hơi lên tới gần 100%.
+### 3.2. Confidence (Độ Tin Cậy)
+- **Thuật ngữ:** Thước đo xác suất có điều kiện. Trong số các trường hợp ĐÃ xảy ra hiện tượng X, có bao nhiêu khả năng kéo theo hiện tượng Y. `Confidence(X -> Y) = Freq(X, Y) / Freq(X)`.
+- **Diễn giải:** Thước đo sự uy tín! "Confidence = 80%" có nghĩa là nếu thợ bảo trì ĐÃ biết chắc chiếc máy này {Vừa Nóng Vừa Giật}, thì tỷ lệ lên đến 80% là quạt tản nhiệt của nó sẽ nhận giấy tử tử.
 
-## 5. Kết Luận và Khuyến Nghị
-Công nhân bảo trì không cần phải nhìn chằm chằm kiểm tra từng linh kiện cơ học một cách cô đơn nữa.
-- **Khuyến nghị hành động:** Hệ thống giám sát (Monitoring) cần lập ngưỡng kép (Double-Threshold Trigger) dựa trên điều kiện KẾT HỢP. Ví dụ, nếu Tool wear chạm 180 phút nhưng Torque đang > 50 Nm, cần bấm còi dừng dây chuyền ngay lập tức.
-- **Tiếp theo:** Liệu các cỗ máy bệnh tật với trạng thái lỗi này có xu hướng kết tụ lại một cách quái đản không? Đón xem phần 2: **Phân Cụm (Clustering)** để cô lập chúng khỏi các cỗ máy khoẻ mạnh.
+### 3.3. Lift (Mức Độ Nâng Cấp/Hệ Số Tương Quan)
+- **Thuật ngữ:** Tỉ lệ giữa xác suất xuất hiện đồng thời sự kiện X và Y so với xác suất xuất hiện nếu như chúng phân phối hoàn toàn độc lập với nhau. `Lift = Confidence(X -> Y) / Support(Y)`.
+- **Diễn giải:** Đây là sức mạnh cốt lõi. Giả sử việc bộ phận "Quạt hỏng độc lập" (Support Y) vốn dĩ diễn ra nhan nhản không rõ nguyên nhân. Lift bóc trần sự thật định lượng: Nếu `Lift = 3`, tức một cỗ máy khi có biểu hiện {Vừa nóng vừa giật} sẽ làm bộ quạt Tăng Khả Năng Rách Nát Hủy Hoại **Lên Gấp 3 Lần** so với chạy bình thường. Nếu `Lift = 1`, hai diễn biến kia xuất hiện cạnh nhau chỉ do trùng hợp ngẫu nhiên.
+
+## 4. Insights Chuyên Sâu Từ Dự Án Hệ AI4I
+Cài đặt ép giảm độ võng tham số Support đã trục vớt được những quy luật ngầm chấn động:
+- **Tuyến Lỗi Vỡ Thiết Bị (Overstrain Failure - OSF):** Chỉ số bóc tách phơi bày rằng, trạng thái cấu trúc `Tool wear (Mòn) > 200` KẾT HỢP với biến số `Torque (Lực vặn) cường độ > 50 Nm`, đẩy giá trị `Lift` hệ thống vọt ngưỡng > 10. Đây là bằng chứng định lượng đắt giá cho dấu hiệu thiết bị chịu lực ép quá tải dẫn đến gãy trục.
+- **Tuyến Hủy Hoại Luồng Tĩnh Khí (HDF):** Sự chênh lệch nhiệt `Temp_diff` ngập vùng biên dưới cực hẹp < 8.6K KẾT TỤ đồng thời với Tốc Quay Lồng Rô-tơ rề chậm (< 1380 rpm) đã kéo mạn Confidence của một vụ đun cháy vỡ thiết bị lên mức trần xấp xỉ 100%. Kiến thức này lập tức trở thành ngưỡng cảnh báo (Threshold-trigger) cho hệ thống!
