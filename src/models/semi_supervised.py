@@ -37,6 +37,9 @@ class SemiSupervisedTrainer:
         self.learning_curves = {}
         self.pseudo_label_risk_records = []
 
+    def _decision_threshold(self) -> float:
+        return float(self.params.get("semi_supervised", {}).get("decision_threshold", 0.35))
+
     def create_partially_labeled(
         self,
         y: np.ndarray,
@@ -86,6 +89,8 @@ class SemiSupervisedTrainer:
 
         y_pred = model.predict(X_test)
         y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
+        if y_prob is not None:
+            y_pred = (y_prob >= self._decision_threshold()).astype(int)
 
         metrics = self._compute_metrics(y_test, y_pred, y_prob)
         result = {
@@ -112,6 +117,8 @@ class SemiSupervisedTrainer:
         st_params = self.params.get("semi_supervised", {}).get("self_training", {})
         threshold = st_params.get("threshold", 0.95)
         max_iter = st_params.get("max_iter", 30)
+        criterion = st_params.get("criterion", "threshold")
+        k_best = int(st_params.get("k_best", 300))
 
         base_clf = RandomForestClassifier(
             n_estimators=200, max_depth=10,
@@ -120,18 +127,26 @@ class SemiSupervisedTrainer:
             n_jobs=-1,
         )
 
-        model = SelfTrainingClassifier(
-            estimator=base_clf,
-            threshold=threshold,
-            max_iter=max_iter,
-            verbose=False,
-        )
+        st_kwargs = {
+            "estimator": base_clf,
+            "max_iter": max_iter,
+            "verbose": False,
+            "criterion": criterion,
+        }
+        if criterion == "k_best":
+            st_kwargs["k_best"] = k_best
+        else:
+            st_kwargs["threshold"] = threshold
+
+        model = SelfTrainingClassifier(**st_kwargs)
         model.fit(X_train, y_train_semi)
 
         y_pred = model.predict(X_test)
         y_prob = None
         if hasattr(model, "predict_proba"):
             y_prob = model.predict_proba(X_test)[:, 1]
+        if y_prob is not None:
+            y_pred = (y_prob >= self._decision_threshold()).astype(int)
 
         # Pseudo-label analysis
         pseudo_labels = model.transduction_
@@ -145,6 +160,8 @@ class SemiSupervisedTrainer:
             "n_labeled": int((y_train_semi != -1).sum()),
             "n_pseudo_labeled": int(n_pseudo),
             "threshold": threshold,
+            "criterion": criterion,
+            "k_best": k_best if criterion == "k_best" else 0,
             **metrics,
         }
         self.results.append(result)
@@ -195,6 +212,8 @@ class SemiSupervisedTrainer:
         model.fit(X_fit, y_fit)
         y_pred = model.predict(X_test)
         y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
+        if y_prob is not None:
+            y_pred = (y_prob >= self._decision_threshold()).astype(int)
 
         metrics = self._compute_metrics(y_test, y_pred, y_prob)
         result = {

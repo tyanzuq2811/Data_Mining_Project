@@ -229,10 +229,8 @@
       <button class="tab-btn active px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-all" data-tab="classification">Phân loại</button>
       <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="association">Luật kết hợp</button>
       <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="clustering">Phân cụm</button>
-      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="anomaly">Bất thường</button>
-      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="regression">Hồi quy</button>
+      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="regression">Hồi quy / Chuỗi thời gian</button>
       <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="semisupervised">Bán giám sát</button>
-      <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="scatter">Khám phá Scatter</button>
       <button class="tab-btn px-4 py-2.5 text-sm font-medium whitespace-nowrap text-neon-300/50 transition-all" data-tab="gallery">Thư viện hình ảnh</button>
     </div>
 
@@ -267,6 +265,20 @@
           <p class="text-xs text-neon-200/60 mb-3">Phát hiện nhóm Type có false alarm cao để tinh chỉnh ngưỡng cảnh báo.</p>
           <div class="overflow-x-auto" id="error-type-table"></div>
         </div>
+        <div class="md:col-span-2 neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">PHÁT HIỆN BẤT THƯỜNG (TÍCH HỢP)</h4>
+          <p class="text-xs text-neon-200/60 mb-3">Đưa về cùng tab Phân loại để đúng bố cục đề bài nhưng vẫn giữ đầy đủ đánh giá bất thường.</p>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <h5 class="text-xs text-neon-300/60 mb-2 tracking-wider">SO SÁNH PHƯƠNG PHÁP</h5>
+              <div id="chart-anomaly" style="height:420px"></div>
+            </div>
+            <div>
+              <h5 class="text-xs text-neon-300/60 mb-2 tracking-wider">BẢNG KẾT QUẢ</h5>
+              <div class="overflow-x-auto" id="anomaly-table"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Association Rules -->
@@ -278,6 +290,21 @@
             Confidence là xác suất B xảy ra khi A đã xảy ra, Lift > 1 nghĩa là A và B đồng xuất hiện mạnh hơn ngẫu nhiên.
             Ưu tiên luật có Lift cao, Confidence cao và Support không quá nhỏ.
           </p>
+          <div class="mt-4 flex items-center gap-3">
+            <label for="association-profile" class="text-xs text-neon-300/70 uppercase tracking-wider">Profile</label>
+            <select id="association-profile" class="neon-input rounded px-3 py-2 text-sm">
+              <option value="strict">Chặt</option>
+              <option value="balanced" selected>Cân bằng</option>
+              <option value="loose">Thoáng</option>
+            </select>
+            <button id="association-apply" class="px-4 py-2 rounded bg-neon-400/20 border border-neon-400/40 text-neon-400 text-sm hover:bg-neon-400/30 transition-colors">
+              Áp dụng
+            </button>
+          </div>
+        </div>
+        <div class="md:col-span-2 neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">SO SÁNH NHANH 3 PROFILE</h4>
+          <div class="overflow-x-auto" id="association-profile-table"></div>
         </div>
         <div class="neon-card p-5">
           <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">TOP LUẬT THEO LIFT</h4>
@@ -316,52 +343,8 @@
           </p>
           <div class="overflow-x-auto" id="cluster-rank-table"></div>
         </div>
-      </div>
-
-      <!-- Anomaly -->
-      <div id="tab-anomaly" class="tab-pane hidden grid md:grid-cols-2 gap-6">
-        <div class="neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">SO SÁNH PHÁT HIỆN BẤT THƯỜNG</h4>
-          <div id="chart-anomaly" style="height:480px"></div>
-        </div>
-        <div class="neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ BẤT THƯỜNG</h4>
-          <div class="overflow-x-auto" id="anomaly-table"></div>
-        </div>
-      </div>
-
-      <!-- Regression -->
-      <div id="tab-regression" class="tab-pane hidden grid md:grid-cols-2 gap-6">
-        <div class="neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">SO SÁNH MÔ HÌNH HỒI QUY</h4>
-          <div id="chart-reg" style="height:480px"></div>
-        </div>
-        <div class="neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ HỒI QUY</h4>
-          <div class="overflow-x-auto" id="reg-table"></div>
-        </div>
-      </div>
-
-      <!-- Semi-supervised -->
-      <div id="tab-semisupervised" class="tab-pane hidden grid md:grid-cols-2 gap-6">
-        <div class="neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">ĐƯỜNG HỌC BÁN GIÁM SÁT</h4>
-          <div id="chart-semi" style="height:480px"></div>
-        </div>
-        <div class="neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ BÁN GIÁM SÁT</h4>
-          <div class="overflow-x-auto" id="semi-table"></div>
-        </div>
-        <div class="md:col-span-2 neon-card p-5">
-          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">RỦI RO PSEUDO-LABEL (FALSE ALARM / MISS)</h4>
-          <p class="text-xs text-neon-200/60 mb-3">Báo cáo theo từng mức % nhãn để chứng minh chất lượng pseudo-labeling (tiêu chí F).</p>
-          <div class="overflow-x-auto" id="pseudo-risk-table"></div>
-        </div>
-      </div>
-
-      <!-- Scatter Explorer -->
-      <div id="tab-scatter" class="tab-pane hidden">
-        <div class="neon-card p-5">
+        <div class="neon-card p-5 md:col-span-2">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KHÁM PHÁ SCATTER (TÍCH HỢP)</h4>
           <div class="flex flex-wrap gap-3 mb-4">
             <div>
               <label class="text-xs text-neon-300/60 uppercase">Trục X</label>
@@ -388,6 +371,47 @@
             </button>
           </div>
           <div id="chart-scatter" style="height:550px"></div>
+        </div>
+      </div>
+
+      <!-- Regression -->
+      <div id="tab-regression" class="tab-pane hidden grid md:grid-cols-2 gap-6">
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">SO SÁNH MÔ HÌNH HỒI QUY</h4>
+          <div id="chart-reg" style="height:480px"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ HỒI QUY</h4>
+          <div class="overflow-x-auto" id="reg-table"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">SO SÁNH MÔ HÌNH CHUỖI THỜI GIAN</h4>
+          <div id="chart-timeseries" style="height:480px"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ CHUỖI THỜI GIAN</h4>
+          <div class="overflow-x-auto" id="timeseries-table"></div>
+        </div>
+        <div class="md:col-span-2 neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">CHỈ SỐ PHỤ (AIC/BIC HOẶC R2)</h4>
+          <div id="chart-timeseries-aux" style="height:420px"></div>
+        </div>
+      </div>
+
+      <!-- Semi-supervised -->
+      <div id="tab-semisupervised" class="tab-pane hidden grid md:grid-cols-2 gap-6">
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">ĐƯỜNG HỌC BÁN GIÁM SÁT</h4>
+          <div id="chart-semi" style="height:480px"></div>
+        </div>
+        <div class="neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">KẾT QUẢ BÁN GIÁM SÁT</h4>
+          <div class="overflow-x-auto" id="semi-table"></div>
+        </div>
+        <div class="md:col-span-2 neon-card p-5">
+          <h4 class="font-orbitron text-xs text-neon-300/70 mb-3 tracking-wider">RỦI RO PSEUDO-LABEL (FALSE ALARM / MISS)</h4>
+          <p class="text-xs text-neon-200/60 mb-3">Báo cáo theo từng mức % nhãn để chứng minh chất lượng pseudo-labeling (tiêu chí F).</p>
+          <div class="overflow-x-auto" id="pseudo-risk-table"></div>
         </div>
       </div>
 
@@ -426,7 +450,7 @@
 <!-- ═══════════════════════════════════════════════ -->
 <!-- JAVASCRIPT -->
 <!-- ═══════════════════════════════════════════════ -->
-<script src="/static/app.js?v=20260317_6"></script>
+<script src="/static/app.js?v=20260318_6"></script>
 
 </body>
 </html>

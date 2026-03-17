@@ -1,3 +1,4 @@
 cluster,n_samples,actual_failures,predicted_failures,tp,fp,fn,tn,fp_rate_in_group,fn_rate_in_group,fn_rate_on_actual_failures
-0,1015,44,38,35,3,9,968,0.003,0.0089,0.2045
-1,985,24,20,18,2,6,959,0.002,0.0061,0.25
+0,1981,57,47,42,5,15,1919,0.0025,0.0076,0.2632
+-1,18,11,11,11,0,0,7,0.0,0.0,0.0
+1,1,0,0,0,0,0,1,0.0,0.0,0.0

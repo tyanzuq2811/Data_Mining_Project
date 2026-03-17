@@ -3,6 +3,8 @@
    ═══════════════════════════════════════════════ */
 
 const API = '';  // same origin
+let currentAssociationProfile = 'balanced';
+let associationProfilesEndpointAvailable = true;
 
 // ── Theme state ─────────────────────────────────
 let currentTheme = localStorage.getItem('pm-theme') || 'dark';
@@ -109,9 +111,8 @@ async function loadKPIs() {
 
 // ── Classification Charts ───────────────────────
 async function loadClassification() {
-  const [clf, cv, errCluster, errType, errClusterType] = await Promise.all([
+  const [clf, errCluster, errType, errClusterType] = await Promise.all([
     fetch(API + '/api/results/classification').then(r => r.json()),
-    fetch(API + '/api/results/timeseries').then(r => r.json()),  // placeholder; we use cv below
     fetch(API + '/api/results/error_by_cluster').then(r => r.json()),
     fetch(API + '/api/results/error_by_type').then(r => r.json()),
     fetch(API + '/api/results/error_by_cluster_type').then(r => r.json()),
@@ -224,11 +225,53 @@ async function loadClassification() {
       }), plotConfig);
     }
   }
+
+  const anomalyChartEl = document.getElementById('chart-anomaly');
+  if (anomalyChartEl) {
+    await loadAnomaly();
+  }
 }
 
 // ── Association Rules ────────────────────────────
 async function loadAssociation() {
-  const data = await fetch(API + '/api/results/association?limit=20').then(r => r.json());
+  const profileSelect = document.getElementById('association-profile');
+  if (profileSelect && profileSelect.value) {
+    currentAssociationProfile = profileSelect.value;
+  }
+
+  const dataPromise = fetch(`${API}/api/results/association?limit=20&profile=${encodeURIComponent(currentAssociationProfile)}`).then(r => r.json());
+  const profilePromise = associationProfilesEndpointAvailable
+    ? fetch(API + '/api/results/association_profiles').then(r => {
+        if (!r.ok) {
+          if (r.status === 404) associationProfilesEndpointAvailable = false;
+          return [];
+        }
+        return r.json();
+      }).catch(() => {
+        associationProfilesEndpointAvailable = false;
+        return [];
+      })
+    : Promise.resolve([]);
+
+  const [data, profileSummary] = await Promise.all([dataPromise, profilePromise]);
+
+  const profileTableEl = document.getElementById('association-profile-table');
+  if (profileTableEl) {
+    const rows = Array.isArray(profileSummary) ? profileSummary.map(r => ({
+      profile: r.profile,
+      min_support: Number(r.min_support),
+      min_confidence: Number(r.min_confidence),
+      min_lift: Number(r.min_lift),
+      n_rules: Number(r.n_rules),
+      avg_lift: Number(r.avg_lift),
+      avg_confidence: Number(r.avg_confidence),
+      avg_support: Number(r.avg_support),
+    })) : [];
+    profileTableEl.innerHTML = rows.length
+      ? neonTable(rows, 'n_rules')
+      : '<p class="text-neon-300/40 text-sm">Không có dữ liệu profile luật kết hợp.</p>';
+  }
+
   if (!Array.isArray(data) || data.length === 0) {
     document.getElementById('association-table').innerHTML = '<p class="text-neon-300/40 text-sm">Chưa có luật kết hợp để hiển thị.</p>';
     Plotly.newPlot('chart-association', [], getLayout({
@@ -280,7 +323,7 @@ async function loadAssociation() {
   ], getLayout({
     height: 620,
     margin: { l: 70, r: 30, t: 20, b: 90 },
-    xaxis: { ...getLayout().xaxis, title: 'Top rules (R1..R10)', tickfont: { size: 13 } },
+    xaxis: { ...getLayout().xaxis, title: `Top rules (R1..R10) - profile: ${currentAssociationProfile}`, tickfont: { size: 13 } },
     yaxis: { ...getLayout().yaxis, title: 'Lift (cao hơn là mạnh hơn)', tickfont: { size: 13 } },
   }), plotConfig);
 
@@ -292,6 +335,27 @@ async function loadAssociation() {
     lift: r.lift,
   }));
   document.getElementById('association-table').innerHTML = neonTable(tableData, 'lift');
+}
+
+function initAssociationControls() {
+  const applyBtn = document.getElementById('association-apply');
+  const profileSelect = document.getElementById('association-profile');
+
+  if (applyBtn) {
+    applyBtn.addEventListener('click', () => {
+      if (profileSelect && profileSelect.value) {
+        currentAssociationProfile = profileSelect.value;
+      }
+      loadAssociation();
+    });
+  }
+
+  if (profileSelect) {
+    profileSelect.addEventListener('change', () => {
+      currentAssociationProfile = profileSelect.value;
+      loadAssociation();
+    });
+  }
 }
 
 // ── Clustering ──────────────────────────────────
@@ -360,70 +424,39 @@ async function loadClustering() {
 
     const models = data.map(r => r.model);
     const silVals = data.map(r => r.silhouette);
-    const silMin = Math.min(...silVals);
     const silMax = Math.max(...silVals);
-    const xMin = Math.min(0, silMin - 0.03);
-    const xMax = silMax + 0.03;
 
-    const traceHorizontal = {
-      y: models,
-      x: silVals,
+    Plotly.newPlot('chart-cluster-sil', [{
+      x: models,
+      y: silVals,
       type: 'bar',
-      orientation: 'h',
       marker: {
         color: data.map(r => r.silhouette > 0 ? '#00bfff88' : '#ff6b6b88'),
-        line: { color: data.map(r => r.silhouette > 0 ? '#00bfff' : '#ff6b6b'), width: 1.2 }
+        line: { color: data.map(r => r.silhouette > 0 ? '#00bfff' : '#ff6b6b'), width: 1.2 },
       },
       text: silVals.map(v => v.toFixed(3)),
       textposition: 'outside',
       cliponaxis: false,
-      textfont: { color: '#e0f7ff', size: 13 },
       hovertemplate:
-        'Model: %{y}<br>' +
-        'Silhouette: %{x:.4f}<br>' +
+        'Model: %{x}<br>' +
+        'Silhouette: %{y:.4f}<br>' +
         'Càng cao càng tách cụm tốt hơn<extra></extra>'
-    };
-
-    const horizontalLayout = getLayout({
+    }], getLayout({
       height: 680,
       bargap: 0.25,
-      margin: { l: 280, r: 80, t: 20, b: 70 },
+      margin: { l: 80, r: 30, t: 20, b: 180 },
       xaxis: {
         ...getLayout().xaxis,
-        title: 'Silhouette Score (cao hơn là tốt hơn)',
-        tickformat: '.3f',
-        range: [xMin, xMax]
+        title: 'Mô hình phân cụm',
+        tickangle: -25,
       },
       yaxis: {
         ...getLayout().yaxis,
-        autorange: 'reversed',
-        automargin: true,
-        type: 'category',
-        tickfont: { size: 13 }
+        type: 'linear',
+        title: 'Silhouette Score (cao hơn là tốt hơn)',
+        range: [0, silMax + 0.05],
       },
-    });
-
-    Plotly.newPlot('chart-cluster-sil', [traceHorizontal], horizontalLayout, plotConfig);
-
-    // Fallback: if browser/plotly renders unexpectedly, redraw vertical to guarantee visible bars.
-    if (!models.length || !silVals.some(v => v > 0)) {
-      Plotly.newPlot('chart-cluster-sil', [{
-        x: models,
-        y: silVals,
-        type: 'bar',
-        marker: {
-          color: '#00bfff88',
-          line: { color: '#00bfff', width: 1.2 },
-        },
-        text: silVals.map(v => v.toFixed(3)),
-        textposition: 'outside',
-      }], getLayout({
-        height: 680,
-        margin: { l: 70, r: 30, t: 20, b: 180 },
-        xaxis: { ...getLayout().xaxis, tickangle: -30 },
-        yaxis: { ...getLayout().yaxis, title: 'Silhouette Score', range: [xMin, xMax] },
-      }), plotConfig);
-    }
+    }), plotConfig);
 
     const tableData = data.map(r => ({
       rank: r.rank,
@@ -462,6 +495,11 @@ async function loadClustering() {
         ? rankRaw.length
         : (rankRaw && Array.isArray(rankRaw.results) ? rankRaw.results.length : 0);
       clusterDebugEl.textContent = `debug: rows=${rows.length}, valid=${data.length}, rank_rows=${rankCount}, first_model=${data[0].model}, first_sil=${data[0].silhouette.toFixed(4)}`;
+    }
+
+    const scatterChartEl = document.getElementById('chart-scatter');
+    if (scatterChartEl) {
+      await loadScatter();
     }
   } catch (err) {
     Plotly.newPlot('chart-cluster-sil', [], getLayout({
@@ -510,6 +548,135 @@ async function loadRegression() {
     },
   ], getLayout({ barmode: 'group' }), plotConfig);
   document.getElementById('reg-table').innerHTML = neonTable(data, 'MAE');
+
+  const tsChartEl = document.getElementById('chart-timeseries');
+  if (tsChartEl) {
+    await loadTimeSeries();
+  }
+}
+
+// ── Time Series ─────────────────────────────────
+async function loadTimeSeries() {
+  const data = await fetch(API + '/api/results/timeseries').then(r => r.json());
+  const toNullableNumber = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const normalized = Array.isArray(data)
+    ? data.map(r => ({
+        model: String(r.model || r.Model || 'unknown'),
+        MAE: toNullableNumber(r.MAE ?? r.mae),
+        RMSE: toNullableNumber(r.RMSE ?? r.rmse),
+        AIC: toNullableNumber(r.AIC ?? r.aic),
+        BIC: toNullableNumber(r.BIC ?? r.bic),
+        R2: toNullableNumber(r.R2 ?? r.r2),
+      }))
+    : [];
+
+  if (!normalized.length) {
+    document.getElementById('timeseries-table').innerHTML = '<p class="text-neon-300/40 text-sm">Chưa có dữ liệu chuỗi thời gian.</p>';
+    Plotly.newPlot('chart-timeseries', [], getLayout({
+      annotations: [{ text: 'Không có dữ liệu chuỗi thời gian', showarrow: false, x: 0.5, y: 0.5, xref: 'paper', yref: 'paper' }]
+    }), plotConfig);
+    Plotly.newPlot('chart-timeseries-aux', [], getLayout({
+      annotations: [{ text: 'Không có dữ liệu chỉ số phụ', showarrow: false, x: 0.5, y: 0.5, xref: 'paper', yref: 'paper' }]
+    }), plotConfig);
+    return;
+  }
+
+  const models = normalized.map(r => r.model);
+  const maeCandidates = normalized
+    .map((r, idx) => ({ idx, val: r.MAE }))
+    .filter(x => Number.isFinite(x.val));
+  const bestMaeIdx = maeCandidates.length
+    ? maeCandidates.reduce((best, cur) => (cur.val < best.val ? cur : best)).idx
+    : -1;
+
+  const maeColors = normalized.map((_, idx) => idx === bestMaeIdx ? '#ffd60acc' : '#00bfff88');
+  const maeLines = normalized.map((_, idx) => idx === bestMaeIdx ? '#ffd60a' : '#00bfff');
+  const bestLabel = bestMaeIdx >= 0 ? `${models[bestMaeIdx]} (MAE=${normalized[bestMaeIdx].MAE.toFixed(2)})` : 'N/A';
+
+  Plotly.newPlot('chart-timeseries', [
+    {
+      x: models,
+      y: normalized.map(r => r.MAE),
+      name: 'MAE',
+      type: 'bar',
+      marker: { color: maeColors, line: { color: maeLines, width: 1.5 } },
+      text: normalized.map((r, idx) => Number.isFinite(r.MAE)
+        ? `${r.MAE.toFixed(2)}${idx === bestMaeIdx ? ' *' : ''}`
+        : '-'),
+      textposition: 'auto',
+      textfont: { color: '#e0f7ff' },
+    },
+    {
+      x: models,
+      y: normalized.map(r => r.RMSE),
+      name: 'RMSE',
+      type: 'bar',
+      marker: { color: '#ff6b6b88', line: { color: '#ff6b6b', width: 1.5 } },
+      text: normalized.map(r => Number.isFinite(r.RMSE) ? r.RMSE.toFixed(2) : '-'),
+      textposition: 'auto',
+      textfont: { color: '#e0f7ff' },
+    },
+  ], getLayout({
+    barmode: 'group',
+    xaxis: { ...getLayout().xaxis, title: `Model tốt nhất theo MAE: ${bestLabel}` },
+  }), plotConfig);
+
+  const auxAicBicRows = normalized.filter(r => Number.isFinite(r.AIC) || Number.isFinite(r.BIC));
+  if (auxAicBicRows.length) {
+    Plotly.newPlot('chart-timeseries-aux', [
+      {
+        x: auxAicBicRows.map(r => r.model),
+        y: auxAicBicRows.map(r => r.AIC),
+        name: 'AIC',
+        type: 'bar',
+        marker: { color: '#a78bfa88', line: { color: '#a78bfa', width: 1.2 } },
+      },
+      {
+        x: auxAicBicRows.map(r => r.model),
+        y: auxAicBicRows.map(r => r.BIC),
+        name: 'BIC',
+        type: 'bar',
+        marker: { color: '#f9731688', line: { color: '#f97316', width: 1.2 } },
+      },
+    ], getLayout({ barmode: 'group' }), plotConfig);
+  } else {
+    const auxR2Rows = normalized.filter(r => Number.isFinite(r.R2));
+    if (auxR2Rows.length) {
+      Plotly.newPlot('chart-timeseries-aux', [{
+        x: auxR2Rows.map(r => r.model),
+        y: auxR2Rows.map(r => r.R2),
+        name: 'R2',
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: { color: '#22c55e', width: 2.5 },
+        marker: { color: '#22c55e', size: 8, line: { color: '#e0f7ff', width: 1 } },
+        text: auxR2Rows.map(r => r.R2.toFixed(3)),
+        textposition: 'top center',
+      }], getLayout({
+        yaxis: { ...getLayout().yaxis, title: 'R2 Score' },
+      }), plotConfig);
+    } else {
+      Plotly.newPlot('chart-timeseries-aux', [], getLayout({
+        annotations: [{ text: 'Không đủ dữ liệu AIC/BIC hoặc R2', showarrow: false, x: 0.5, y: 0.5, xref: 'paper', yref: 'paper' }]
+      }), plotConfig);
+    }
+  }
+
+  const tableData = normalized.map((r, idx) => ({
+    model: r.model,
+    MAE: r.MAE,
+    RMSE: r.RMSE,
+    AIC: r.AIC,
+    BIC: r.BIC,
+    R2: r.R2,
+    best_mae: idx === bestMaeIdx ? 'YES' : '',
+  }));
+  document.getElementById('timeseries-table').innerHTML = neonTable(tableData, 'MAE');
 }
 
 // ── Semi-supervised ─────────────────────────────
@@ -778,10 +945,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (tab === 'classification') loadClassification();
     else if (tab === 'association') loadAssociation();
     else if (tab === 'clustering') loadClustering();
-    else if (tab === 'anomaly') loadAnomaly();
     else if (tab === 'regression') loadRegression();
     else if (tab === 'semisupervised') loadSemiSupervised();
-    else if (tab === 'scatter') loadScatter();
     else if (tab === 'gallery') loadGallery();
   });
 });
@@ -867,6 +1032,7 @@ function initParticles() {
 // ── INIT ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
+  initAssociationControls();
   initParticles();
   loadKPIs();
   loadClassification();

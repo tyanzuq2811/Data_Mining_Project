@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, Request
+from fastapi import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -52,7 +53,13 @@ X_train, X_test, y_train, y_test = train_test_split(
 scaler = StandardScaler()
 scaler.fit(X_train)
 
-_association_cache = None
+_association_cache = {}
+
+ASSOCIATION_PROFILE_PRESETS = {
+    "strict": {"min_support": 0.003, "min_confidence": 0.30, "min_lift": 1.20},
+    "balanced": {"min_support": 0.002, "min_confidence": 0.20, "min_lift": 1.05},
+    "loose": {"min_support": 0.0015, "min_confidence": 0.15, "min_lift": 1.00},
+}
 
 
 def _split_items(value: str) -> list:
@@ -85,13 +92,22 @@ def _apply_association_policy(df: pd.DataFrame) -> pd.DataFrame:
     return out.reset_index(drop=True)
 
 
-def _compute_association_rules() -> pd.DataFrame:
-    """Compute association rules from processed data and return a web-friendly table."""
+def _compute_association_rules(profile: str = "balanced") -> pd.DataFrame:
+    """Compute association rules from processed data by profile and return a web-friendly table."""
     from src.data.loader import load_params
     from src.features.builder import FeatureBuilder
     from src.mining.association import AssociationMiner
 
+    profile = str(profile).lower().strip()
+    if profile not in ASSOCIATION_PROFILE_PRESETS:
+        profile = "balanced"
+
     params = load_params(str(ROOT / "configs" / "params.yaml"))
+    preset = ASSOCIATION_PROFILE_PRESETS[profile]
+    params["mining"]["apriori"]["min_support"] = preset["min_support"]
+    params["mining"]["apriori"]["min_confidence"] = preset["min_confidence"]
+    params["mining"]["apriori"]["min_lift"] = preset["min_lift"]
+
     builder = FeatureBuilder(params)
     binary_df = builder.get_apriori_features(df_processed, params)
 
@@ -317,24 +333,58 @@ async def classification_results():
 
 
 @app.get("/api/results/association")
-async def association_results(limit: int = 20):
-    """Return top association rules for dashboard."""
+async def association_results(limit: int = 20, profile: str = "balanced"):
+    """Return top association rules for dashboard by profile."""
     global _association_cache
-    path = TABLES_DIR / "association_rules.csv"
 
-    if _association_cache is None:
-        if path.exists():
+    profile = str(profile).lower().strip()
+    if profile not in ASSOCIATION_PROFILE_PRESETS:
+        profile = "balanced"
+
+    if profile not in _association_cache:
+        # Keep backward compatibility: use file cache for balanced profile when available.
+        path = TABLES_DIR / "association_rules.csv"
+        if profile == "balanced" and path.exists():
             df = pd.read_csv(path).fillna(0)
+            df = _apply_association_policy(df)
         else:
-            df = _compute_association_rules()
-            TABLES_DIR.mkdir(parents=True, exist_ok=True)
-            df.to_csv(path, index=False)
-        _association_cache = _apply_association_policy(df)
+            df = _compute_association_rules(profile=profile)
+        _association_cache[profile] = df
 
-    df = _association_cache.copy()
+    df = _association_cache.get(profile, pd.DataFrame()).copy()
 
     limit = max(5, min(int(limit), 100))
     return df.head(limit).to_dict(orient="records")
+
+
+@app.get("/api/results/association_profiles")
+async def association_profiles():
+    """Return quick quality summary for strict/balanced/loose association profiles."""
+    rows = []
+    for name, preset in ASSOCIATION_PROFILE_PRESETS.items():
+        if name not in _association_cache:
+            _association_cache[name] = _compute_association_rules(profile=name)
+        df = _association_cache[name]
+        n_rules = int(len(df))
+        if n_rules > 0:
+            avg_lift = float(pd.to_numeric(df["lift"], errors="coerce").mean())
+            avg_conf = float(pd.to_numeric(df["confidence"], errors="coerce").mean())
+            avg_support = float(pd.to_numeric(df["support"], errors="coerce").mean())
+        else:
+            avg_lift, avg_conf, avg_support = 0.0, 0.0, 0.0
+
+        rows.append({
+            "profile": name,
+            "min_support": preset["min_support"],
+            "min_confidence": preset["min_confidence"],
+            "min_lift": preset["min_lift"],
+            "n_rules": n_rules,
+            "avg_lift": round(avg_lift, 4),
+            "avg_confidence": round(avg_conf, 4),
+            "avg_support": round(avg_support, 4),
+        })
+
+    return rows
 
 
 @app.get("/api/results/clustering")
@@ -533,6 +583,12 @@ async def list_figures():
 async def chrome_devtools_probe():
     """Silence harmless Chrome DevTools probe to reduce noisy 404 logs."""
     return {}
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    """Return empty favicon response to avoid repetitive 404 noise in logs."""
+    return Response(status_code=204)
 
 
 @app.get("/api/data/scatter/{feature_x}/{feature_y}")

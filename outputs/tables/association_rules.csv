@@ -1,2 +1,19 @@
 rule,antecedents,consequents,support,confidence,lift
 "Air temperature [K]_high, Process temperature [K]_normal, Rotational speed [rpm]_low -> Machine failure","Air temperature [K]_high, Process temperature [K]_normal, Rotational speed [rpm]_low",Machine failure,0.009,0.35156249999999994,10.370575221238937
+"Air temperature [K]_high, Process temperature [K]_normal, Torque [Nm]_high -> Machine failure","Air temperature [K]_high, Process temperature [K]_normal, Torque [Nm]_high",Machine failure,0.0076,0.29803921568627456,8.791717276881256
+"Air temperature [K]_high, Rotational speed [rpm]_low, Tool wear [min]_high -> Machine failure","Air temperature [K]_high, Rotational speed [rpm]_low, Tool wear [min]_high",Machine failure,0.0048,0.2962962962962963,8.740303725554462
+"Air temperature [K]_high, Rotational speed [rpm]_low, Torque [Nm]_high -> Machine failure","Air temperature [K]_high, Rotational speed [rpm]_low, Torque [Nm]_high",Machine failure,0.0126,0.27096774193548384,7.99314872966029
+"Air temperature [K]_high, Tool wear [min]_high, Torque [Nm]_high -> Machine failure","Air temperature [K]_high, Tool wear [min]_high, Torque [Nm]_high",Machine failure,0.0043,0.270440251572327,7.977588541956548
+"Air temperature [K]_high, Rotational speed [rpm]_low, Type_L -> Machine failure","Air temperature [K]_high, Rotational speed [rpm]_low, Type_L",Machine failure,0.0096,0.2553191489361702,7.531538316701186
+"Rotational speed [rpm]_low, Tool wear [min]_high, Type_L -> Machine failure","Rotational speed [rpm]_low, Tool wear [min]_high, Type_L",Machine failure,0.0097,0.24744897959183676,7.299379928962736
+"Tool wear [min]_high, Torque [Nm]_high, Type_L -> Machine failure","Tool wear [min]_high, Torque [Nm]_high, Type_L",Machine failure,0.0096,0.2448979591836735,7.224128589488894
+"Rotational speed [rpm]_low, Tool wear [min]_high, Torque [Nm]_high -> Machine failure","Rotational speed [rpm]_low, Tool wear [min]_high, Torque [Nm]_high",Machine failure,0.0108,0.23684210526315788,6.986492780624126
+"Air temperature [K]_high, Rotational speed [rpm]_low -> Machine failure","Air temperature [K]_high, Rotational speed [rpm]_low",Machine failure,0.0146,0.23434991974317818,6.912976983574578
+"Air temperature [K]_high, Torque [Nm]_high, Type_L -> Machine failure","Air temperature [K]_high, Torque [Nm]_high, Type_L",Machine failure,0.0085,0.23224043715846998,6.850750358656931
+"Process temperature [K]_high, Rotational speed [rpm]_low, Tool wear [min]_high -> Machine failure","Process temperature [K]_high, Rotational speed [rpm]_low, Tool wear [min]_high",Machine failure,0.0032,0.2318840579710145,6.840237698260014
+"Process temperature [K]_high, Tool wear [min]_high, Torque [Nm]_high -> Machine failure","Process temperature [K]_high, Tool wear [min]_high, Torque [Nm]_high",Machine failure,0.0034,0.23129251700680273,6.822788112295066
+"Air temperature [K]_high, Rotational speed [rpm]_low, Tool wear [min]_normal -> Machine failure","Air temperature [K]_high, Rotational speed [rpm]_low, Tool wear [min]_normal",Machine failure,0.0069,0.21766561514195587,6.420814605957401
+"Air temperature [K]_high, Torque [Nm]_high -> Machine failure","Air temperature [K]_high, Torque [Nm]_high",Machine failure,0.013,0.21276595744680848,6.276281930584322
+"Air temperature [K]_high, Rotational speed [rpm]_low, Type_M -> Machine failure","Air temperature [K]_high, Rotational speed [rpm]_low, Type_M",Machine failure,0.004,0.20833333333333334,6.145526057030482
+"Air temperature [K]_high, Tool wear [min]_normal, Torque [Nm]_high -> Machine failure","Air temperature [K]_high, Tool wear [min]_normal, Torque [Nm]_high",Machine failure,0.0062,0.20394736842105263,6.016146561092998
+"Air temperature [K]_high, Rotational speed [rpm]_low, Tool wear [min]_low -> Machine failure","Air temperature [K]_high, Rotational speed [rpm]_low, Tool wear [min]_low",Machine failure,0.0029,0.20138888888888887,5.940675188462799

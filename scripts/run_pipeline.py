@@ -20,6 +20,29 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import numpy as np
 
+
+def get_clustering_feature_columns(df_feat: pd.DataFrame, params: dict) -> list:
+    """Use a compact operational feature set for clustering to improve cluster separability."""
+    cfg_cols = params.get("mining", {}).get("clustering", {}).get("feature_subset", [])
+    cols = [c for c in cfg_cols if c in df_feat.columns]
+    if cols:
+        return cols
+
+    fallback = [
+        "Air temperature [K]",
+        "Process temperature [K]",
+        "Rotational speed [rpm]",
+        "Torque [Nm]",
+        "Tool wear [min]",
+        "temp_diff",
+        "power",
+        "torque_speed_ratio",
+        "wear_torque",
+        "air_temp_x_speed",
+        "proc_temp_x_torque",
+    ]
+    return [c for c in fallback if c in df_feat.columns]
+
 # ──────────────────────────────────────────────────────
 # 1. EDA
 # ──────────────────────────────────────────────────────
@@ -124,9 +147,8 @@ def step_mining(df_feat=None):
 
     # ── Clustering ──
     print("\n── Clustering ──")
-    numeric_cols = df_feat.select_dtypes(include=[np.number]).columns.tolist()
-    exclude = ["UDI", "Machine failure", "TWF", "HDF", "PWF", "OSF", "RNF"]
-    feat_cols = [c for c in numeric_cols if c not in exclude]
+    feat_cols = get_clustering_feature_columns(df_feat, params)
+    print(f"  Clustering feature subset: {len(feat_cols)} columns")
     from sklearn.preprocessing import StandardScaler
     X_clust = StandardScaler().fit_transform(df_feat[feat_cols])
 
@@ -248,9 +270,7 @@ def step_model(df_feat=None):
         eval_df["product_type"] = pd.Series(type_series, index=df_feat.index).loc[eval_df["row_index"]].values
 
         # Attach cluster labels using the same clustering selection logic.
-        numeric_cols = df_feat.select_dtypes(include=[np.number]).columns.tolist()
-        exclude_cols = ["UDI", "Machine failure", "TWF", "HDF", "PWF", "OSF", "RNF"]
-        feat_cols_cluster = [c for c in numeric_cols if c not in exclude_cols]
+        feat_cols_cluster = get_clustering_feature_columns(df_feat, params)
         X_clust = StandardScaler().fit_transform(df_feat[feat_cols_cluster])
         ca = ClusterAnalyzer(params)
         ca.fit_kmeans(X_clust)
