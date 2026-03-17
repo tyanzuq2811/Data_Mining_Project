@@ -1,0 +1,5 @@
+model,MAE,RMSE,R2,train_time_s
+random_forest_reg,53.3288,62.701,0.0791,0.65
+xgboost_reg,52.9623,62.7075,0.079,0.11
+gradient_boosting_reg,53.0351,62.7276,0.0784,3.59
+linear_regression,56.8132,65.3885,-0.0015,0.0

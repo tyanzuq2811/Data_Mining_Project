@@ -93,9 +93,12 @@ class TimeSeriesForecaster:
         from sklearn.ensemble import GradientBoostingRegressor
 
         if feature_cols is None:
-            feature_cols = [c for c in train_df.columns
-                           if c not in ["UDI", "Product ID", target_col, "Machine failure"]
-                           and not c.startswith(("TWF", "HDF", "PWF", "OSF", "RNF"))]
+            # Use only causal lag features by default to avoid target leakage at current timestamp.
+            feature_cols = [c for c in train_df.columns if "_lag" in c and c != target_col]
+
+        feature_cols = [c for c in feature_cols if c in train_df.columns and c in test_df.columns]
+        if len(feature_cols) == 0:
+            raise ValueError("No valid lag features available for time-series regression")
 
         X_train = train_df[feature_cols].values
         y_train = train_df[target_col].values

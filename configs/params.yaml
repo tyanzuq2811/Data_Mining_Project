@@ -55,10 +55,17 @@ feature_engineering:
 
 mining:
   apriori:
-    min_support: 0.01
-    min_confidence: 0.5
-    min_lift: 1.5
+    min_support: 0.003
+    min_confidence: 0.3
+    min_lift: 1.2
     max_len: 4
+    policy:
+      rule_mode: "many_to_one"
+      min_antecedent_len: 2
+      max_consequent_len: 1
+      allowed_consequents:
+        - "Machine failure"
+      exclude_failure_in_antecedents: true
   clustering:
     algorithms: ["kmeans", "dbscan", "hierarchical"]
     kmeans:
@@ -126,7 +133,7 @@ modeling:
         learning_rate: [0.01, 0.05, 0.1]
 
   time_series:
-    uid_as_time_index: true    # Treat UDI as time index
+    uid_as_time_index: true    
     target: "Tool wear [min]"
     train_ratio: 0.8
     arima_order: [2, 1, 2]

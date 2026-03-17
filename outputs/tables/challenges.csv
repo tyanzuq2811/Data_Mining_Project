@@ -1,0 +1,6 @@
+,Thách thức,Giải pháp
+0,Mất cân bằng lớp nghiêm trọng (3.39% failure),"class_weight=""balanced"", scale_pos_weight, đánh giá bằng F1/PR-AUC thay vì accuracy"
+1,Data leakage tiềm ẩn từ failure type columns,Loại bỏ TWF/HDF/PWF/OSF/RNF khỏi feature set khi train classifier Machine failure
+2,Không có timestamp thực (chỉ UDI),Coi UDI ≈ time index với giả định rõ ràng; chia train/test theo thứ tự không shuffle
+3,Label Spreading chậm O(n²) cho 10K samples,Subsample 5000 samples cho Label Spreading; Self-Training không bị hạn chế này
+4,Pseudo-label false alarm trong bán giám sát,"Threshold cao (0.95), phân tích rủi ro pseudo-label, kiểm tra accuracy trên hold-out"

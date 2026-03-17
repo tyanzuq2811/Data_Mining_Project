@@ -35,6 +35,7 @@ class SemiSupervisedTrainer:
         self.params = params
         self.results = []
         self.learning_curves = {}
+        self.pseudo_label_risk_records = []
 
     def create_partially_labeled(
         self,
@@ -99,6 +100,7 @@ class SemiSupervisedTrainer:
     def train_self_training(
         self,
         X_train: np.ndarray,
+        y_train_true: np.ndarray,
         y_train_semi: np.ndarray,
         X_test: np.ndarray,
         y_test: np.ndarray,
@@ -148,7 +150,14 @@ class SemiSupervisedTrainer:
         self.results.append(result)
 
         # Phân tích pseudo-label
-        self._analyze_pseudo_labels(y_train_semi, pseudo_labels, original_unlabeled, label_pct)
+        risk = self._analyze_pseudo_labels(
+            y_true_full=y_train_true,
+            y_semi_original=y_train_semi,
+            y_transduction=pseudo_labels,
+            unlabeled_mask=original_unlabeled,
+            label_pct=label_pct,
+        )
+        result.update(risk)
         return result
 
     def train_label_spreading(
@@ -209,6 +218,7 @@ class SemiSupervisedTrainer:
         """
         label_pcts = self.params.get("semi_supervised", {}).get("label_percentages", [0.05, 0.10, 0.20])
         self.results = []
+        self.pseudo_label_risk_records = []
 
         for pct in label_pcts:
             print(f"\n{'='*60}")
@@ -221,7 +231,7 @@ class SemiSupervisedTrainer:
             self.train_supervised_only(X_train, y_semi, X_test, y_test, pct)
 
             # Self-Training
-            self.train_self_training(X_train, y_semi, X_test, y_test, pct)
+            self.train_self_training(X_train, y_train, y_semi, X_test, y_test, pct)
 
             # Label Spreading
             self.train_label_spreading(X_train, y_semi, X_test, y_test, pct)
@@ -268,7 +278,7 @@ class SemiSupervisedTrainer:
                 curve_data.append({"pct": pct, "method": "supervised_only", "f1": r1["f1"]})
 
                 # Self-Training
-                r2 = self.train_self_training(X_train, y_semi, X_test, y_test, pct)
+                r2 = self.train_self_training(X_train, y_train, y_semi, X_test, y_test, pct)
                 curve_data.append({"pct": pct, "method": "self_training", "f1": r2["f1"]})
 
                 # Label Spreading
@@ -302,6 +312,7 @@ class SemiSupervisedTrainer:
 
     def _analyze_pseudo_labels(
         self,
+        y_true_full: np.ndarray,
         y_semi_original: np.ndarray,
         y_transduction: np.ndarray,
         unlabeled_mask: np.ndarray,
@@ -310,12 +321,46 @@ class SemiSupervisedTrainer:
         """Phân tích rủi ro pseudo-label."""
         # So sánh pseudo-label vs label gốc (nếu biết)
         # Trong thực tế ta KHÔNG biết nhãn thật của unlabeled, nhưng vì đây là thử nghiệm...
-        n_pseudo = unlabeled_mask.sum()
-        pseudo_pos = (y_transduction[unlabeled_mask] == 1).sum()
-        pseudo_neg = (y_transduction[unlabeled_mask] == 0).sum()
+        n_pseudo = int(unlabeled_mask.sum())
+        y_true_u = y_true_full[unlabeled_mask]
+        y_pred_u = y_transduction[unlabeled_mask]
+
+        pseudo_pos = int((y_pred_u == 1).sum())
+        pseudo_neg = int((y_pred_u == 0).sum())
+        pseudo_tp = int(((y_pred_u == 1) & (y_true_u == 1)).sum())
+        pseudo_fp = int(((y_pred_u == 1) & (y_true_u == 0)).sum())
+        pseudo_fn = int(((y_pred_u == 0) & (y_true_u == 1)).sum())
+        true_failures_unlabeled = int((y_true_u == 1).sum())
+
+        pseudo_precision = pseudo_tp / (pseudo_pos + 1e-10)
+        false_alarm_rate = pseudo_fp / (pseudo_pos + 1e-10)
+        miss_rate_unlabeled_failures = pseudo_fn / (true_failures_unlabeled + 1e-10)
 
         print(f"  [pseudo-label analysis] {label_pct*100:.0f}%:")
         print(f"    Total pseudo-labeled: {n_pseudo}")
         print(f"    Pseudo positive (failure): {pseudo_pos}")
         print(f"    Pseudo negative (normal): {pseudo_neg}")
         print(f"    Pseudo failure rate: {pseudo_pos/(n_pseudo+1e-10)*100:.2f}%")
+        print(f"    False alarms in pseudo positives: {pseudo_fp} ({false_alarm_rate*100:.2f}%)")
+
+        risk = {
+            "label_pct": round(float(label_pct), 4),
+            "n_unlabeled": n_pseudo,
+            "n_true_failures_unlabeled": true_failures_unlabeled,
+            "n_pseudo_positive": pseudo_pos,
+            "n_pseudo_negative": pseudo_neg,
+            "pseudo_tp": pseudo_tp,
+            "pseudo_fp_false_alarm": pseudo_fp,
+            "pseudo_fn_missed_failure": pseudo_fn,
+            "pseudo_precision": round(float(pseudo_precision), 4),
+            "pseudo_false_alarm_rate": round(float(false_alarm_rate), 4),
+            "pseudo_miss_rate_on_unlabeled_failures": round(float(miss_rate_unlabeled_failures), 4),
+        }
+        self.pseudo_label_risk_records.append(risk)
+        return risk
+
+    def get_pseudo_label_risk_table(self) -> pd.DataFrame:
+        """Return pseudo-label false alarm/miss analysis by labeled percentage."""
+        if len(self.pseudo_label_risk_records) == 0:
+            return pd.DataFrame()
+        return pd.DataFrame(self.pseudo_label_risk_records).sort_values("label_pct")

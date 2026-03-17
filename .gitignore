@@ -2,9 +2,6 @@
 data/raw/
 data/processed/
 
-# ── Outputs ───────────────────────────────────────────
-outputs/
-
 # ── Python cache ──────────────────────────────────────
 __pycache__/
 *.py[cod]

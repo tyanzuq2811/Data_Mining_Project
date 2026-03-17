@@ -1,0 +1,2 @@
+rule,antecedents,consequents,support,confidence,lift
+"Air temperature [K]_high, Process temperature [K]_normal, Rotational speed [rpm]_low -> Machine failure","Air temperature [K]_high, Process temperature [K]_normal, Rotational speed [rpm]_low",Machine failure,0.009,0.35156249999999994,10.370575221238937

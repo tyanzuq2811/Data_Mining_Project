@@ -1,0 +1,4 @@
+product_type,n_samples,actual_failures,predicted_failures,tp,fp,fn,tn,fp_rate_in_group,fn_rate_in_group,fn_rate_on_actual_failures
+M,616,25,22,19,3,6,588,0.0049,0.0097,0.24
+L,1170,38,33,32,1,6,1131,0.0009,0.0051,0.1579
+H,214,5,3,2,1,3,208,0.0047,0.014,0.6

@@ -52,6 +52,63 @@ X_train, X_test, y_train, y_test = train_test_split(
 scaler = StandardScaler()
 scaler.fit(X_train)
 
+_association_cache = None
+
+
+def _split_items(value: str) -> list:
+    return [s.strip() for s in str(value).split(",") if s and str(s).strip()]
+
+
+def _apply_association_policy(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only many->one actionable rules to avoid leakage and improve operational relevance."""
+    if df is None or df.empty:
+        return pd.DataFrame(columns=["rule", "antecedents", "consequents", "support", "confidence", "lift"])
+
+    out = df.copy()
+
+    if "antecedents" in out.columns:
+        out = out[out["antecedents"].apply(lambda x: len(_split_items(x)) >= 2)]
+
+    if "consequents" in out.columns:
+        out = out[out["consequents"].astype(str).str.strip() == "Machine failure"]
+
+    forbidden = {"Machine failure", "TWF", "HDF", "PWF", "OSF", "RNF"}
+    if "antecedents" in out.columns:
+        out = out[out["antecedents"].apply(lambda x: len(set(_split_items(x)) & forbidden) == 0)]
+
+    for c in ["support", "confidence", "lift"]:
+        if c in out.columns:
+            out[c] = pd.to_numeric(out[c], errors="coerce")
+
+    out = out.dropna(subset=[c for c in ["support", "confidence", "lift"] if c in out.columns])
+    out = out.sort_values(["lift", "confidence", "support"], ascending=False)
+    return out.reset_index(drop=True)
+
+
+def _compute_association_rules() -> pd.DataFrame:
+    """Compute association rules from processed data and return a web-friendly table."""
+    from src.data.loader import load_params
+    from src.features.builder import FeatureBuilder
+    from src.mining.association import AssociationMiner
+
+    params = load_params(str(ROOT / "configs" / "params.yaml"))
+    builder = FeatureBuilder(params)
+    binary_df = builder.get_apriori_features(df_processed, params)
+
+    miner = AssociationMiner(params)
+    _, rules = miner.mine(binary_df)
+    if rules is None or rules.empty:
+        return pd.DataFrame(columns=["rule", "antecedents", "consequents", "support", "confidence", "lift"])
+
+    rules = rules.copy()
+    rules["antecedents"] = rules["antecedents"].apply(lambda x: ", ".join(sorted(map(str, list(x)))))
+    rules["consequents"] = rules["consequents"].apply(lambda x: ", ".join(sorted(map(str, list(x)))))
+    rules["rule"] = rules["antecedents"] + " -> " + rules["consequents"]
+
+    cols = ["rule", "antecedents", "consequents", "support", "confidence", "lift"]
+    out = rules[cols].sort_values(["lift", "confidence", "support"], ascending=False).reset_index(drop=True)
+    return _apply_association_policy(out)
+
 # ── FastAPI app ───────────────────────────────────────
 app = FastAPI(
     title="Predictive Maintenance API",
@@ -259,11 +316,122 @@ async def classification_results():
     return df.to_dict(orient="records")
 
 
+@app.get("/api/results/association")
+async def association_results(limit: int = 20):
+    """Return top association rules for dashboard."""
+    global _association_cache
+    path = TABLES_DIR / "association_rules.csv"
+
+    if _association_cache is None:
+        if path.exists():
+            df = pd.read_csv(path).fillna(0)
+        else:
+            df = _compute_association_rules()
+            TABLES_DIR.mkdir(parents=True, exist_ok=True)
+            df.to_csv(path, index=False)
+        _association_cache = _apply_association_policy(df)
+
+    df = _association_cache.copy()
+
+    limit = max(5, min(int(limit), 100))
+    return df.head(limit).to_dict(orient="records")
+
+
 @app.get("/api/results/clustering")
 async def clustering_results():
     """Return top clustering results."""
     path = TABLES_DIR / "clustering_comparison.csv"
-    df = pd.read_csv(path).fillna(0).head(10)
+    raw = pd.read_csv(path).fillna(0)
+
+    # Normalize possible column naming variants (e.g. MODEL/model, DAVIES_BOULDIN/davies_bouldin).
+    col_map = {c.strip().lower(): c for c in raw.columns}
+
+    def pick(*cands):
+        for c in cands:
+            if c in col_map:
+                return col_map[c]
+        return None
+
+    c_model = pick("model")
+    c_sil = pick("silhouette", "silhouette_score")
+    c_db = pick("davies_bouldin", "davies-bouldin", "dbi")
+    c_ch = pick("calinski_harabasz", "calinski-harabasz", "chi")
+
+    if not all([c_model, c_sil, c_db, c_ch]):
+        return []
+
+    df = pd.DataFrame({
+        "model": raw[c_model].astype(str),
+        "silhouette": pd.to_numeric(raw[c_sil], errors="coerce").fillna(0.0),
+        "davies_bouldin": pd.to_numeric(raw[c_db], errors="coerce").fillna(0.0),
+        "calinski_harabasz": pd.to_numeric(raw[c_ch], errors="coerce").fillna(0.0),
+    })
+
+    df = df.sort_values("silhouette", ascending=False).head(10).reset_index(drop=True)
+    return df.to_dict(orient="records")
+
+
+@app.get("/api/results/cluster_ranking")
+@app.get("/api/results/cluster-ranking")
+async def cluster_ranking():
+    """Return cluster risk-priority ranking to support maintenance actions."""
+    path = TABLES_DIR / "cluster_failure_profiles.csv"
+    raw = pd.read_csv(path).fillna(0)
+
+    col_map = {c.strip().lower(): c for c in raw.columns}
+
+    def pick(*cands):
+        for c in cands:
+            if c in col_map:
+                return col_map[c]
+        return None
+
+    c_cluster = pick("cluster")
+    c_count = pick("count", "n_samples")
+    c_fail_rate = pick("failure_rate", "fail_rate")
+    c_fail_n = pick("n_failures", "failures")
+    c_wear = pick("avg_tool_wear", "tool_wear_mean")
+    c_torque = pick("avg_torque", "torque_mean")
+
+    if not all([c_cluster, c_count, c_fail_rate, c_fail_n, c_wear, c_torque]):
+        return []
+
+    df = pd.DataFrame({
+        "cluster": pd.to_numeric(raw[c_cluster], errors="coerce").fillna(-1).astype(int),
+        "count": pd.to_numeric(raw[c_count], errors="coerce").fillna(0),
+        "n_failures": pd.to_numeric(raw[c_fail_n], errors="coerce").fillna(0),
+        "failure_rate": pd.to_numeric(raw[c_fail_rate], errors="coerce").fillna(0.0),
+        "avg_tool_wear": pd.to_numeric(raw[c_wear], errors="coerce").fillna(0.0),
+        "avg_torque": pd.to_numeric(raw[c_torque], errors="coerce").fillna(0.0),
+    })
+
+    def norm(s):
+        mn, mx = float(s.min()), float(s.max())
+        if mx <= mn:
+            return pd.Series(0.0, index=s.index)
+        return (s - mn) / (mx - mn)
+
+    # Priority score (0-100): high failure rate + severe wear + high torque + enough support.
+    score = (
+        0.60 * norm(df["failure_rate"]) +
+        0.20 * norm(df["avg_tool_wear"]) +
+        0.15 * norm(df["avg_torque"]) +
+        0.05 * norm(df["count"])
+    ) * 100
+    df["priority_score"] = score.round(1)
+
+    def to_level(v):
+        if v >= 70:
+            return "Rất cao"
+        if v >= 45:
+            return "Cao"
+        if v >= 25:
+            return "Trung bình"
+        return "Thấp"
+
+    df["priority_level"] = df["priority_score"].map(to_level)
+    df = df.sort_values(["priority_score", "failure_rate", "avg_tool_wear"], ascending=[False, False, False])
+    df.insert(0, "rank", range(1, len(df) + 1))
     return df.to_dict(orient="records")
 
 
@@ -271,6 +439,46 @@ async def clustering_results():
 async def semi_supervised_results():
     """Return semi-supervised results."""
     path = TABLES_DIR / "semi_supervised_results.csv"
+    df = pd.read_csv(path).fillna(0)
+    return df.to_dict(orient="records")
+
+
+@app.get("/api/results/pseudo_label_risk")
+async def pseudo_label_risk_results():
+    """Return pseudo-label false alarm and miss analysis by labeled ratio."""
+    path = TABLES_DIR / "pseudo_label_risk.csv"
+    if not path.exists():
+        return []
+    df = pd.read_csv(path).fillna(0)
+    return df.to_dict(orient="records")
+
+
+@app.get("/api/results/error_by_cluster")
+async def error_by_cluster_results():
+    """Return FP/FN analysis grouped by cluster on test split."""
+    path = TABLES_DIR / "error_by_cluster.csv"
+    if not path.exists():
+        return []
+    df = pd.read_csv(path).fillna(0)
+    return df.to_dict(orient="records")
+
+
+@app.get("/api/results/error_by_type")
+async def error_by_type_results():
+    """Return FP/FN analysis grouped by product type on test split."""
+    path = TABLES_DIR / "error_by_type.csv"
+    if not path.exists():
+        return []
+    df = pd.read_csv(path).fillna(0)
+    return df.to_dict(orient="records")
+
+
+@app.get("/api/results/error_by_cluster_type")
+async def error_by_cluster_type_results():
+    """Return FP/FN analysis grouped by cluster x product type on test split."""
+    path = TABLES_DIR / "error_by_cluster_type.csv"
+    if not path.exists():
+        return []
     df = pd.read_csv(path).fillna(0)
     return df.to_dict(orient="records")
 
@@ -319,6 +527,12 @@ async def list_figures():
     """List available figures."""
     figs = [f.name for f in FIGURES_DIR.glob("*.png")]
     return {"figures": sorted(figs)}
+
+
+@app.get("/.well-known/appspecific/com.chrome.devtools.json")
+async def chrome_devtools_probe():
+    """Silence harmless Chrome DevTools probe to reduce noisy 404 logs."""
+    return {}
 
 
 @app.get("/api/data/scatter/{feature_x}/{feature_y}")

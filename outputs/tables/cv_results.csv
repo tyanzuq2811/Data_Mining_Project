@@ -1,0 +1,6 @@
+model,cv_f1_mean,cv_f1_std
+logistic_regression,0.308,0.0168
+random_forest,0.6901,0.0373
+gradient_boosting,0.856,0.0182
+xgboost,0.798,0.027
+lightgbm,0.7772,0.0168

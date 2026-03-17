@@ -200,5 +200,6 @@ class FeatureBuilder:
         if target in df.columns:
             apriori_df[target] = df[target]
 
+        apriori_df = apriori_df.astype(bool)
         print(f"[builder] Created Apriori binary DataFrame: {apriori_df.shape}")
         return apriori_df

@@ -109,9 +109,12 @@ async function loadKPIs() {
 
 // ── Classification Charts ───────────────────────
 async function loadClassification() {
-  const [clf, cv] = await Promise.all([
+  const [clf, cv, errCluster, errType, errClusterType] = await Promise.all([
     fetch(API + '/api/results/classification').then(r => r.json()),
     fetch(API + '/api/results/timeseries').then(r => r.json()),  // placeholder; we use cv below
+    fetch(API + '/api/results/error_by_cluster').then(r => r.json()),
+    fetch(API + '/api/results/error_by_type').then(r => r.json()),
+    fetch(API + '/api/results/error_by_cluster_type').then(r => r.json()),
   ]);
   // Fetch CV data
   const cvData = await fetch(API + '/api/results/classification').then(r => r.json());
@@ -156,26 +159,328 @@ async function loadClassification() {
 
   // Table
   document.getElementById('clf-table').innerHTML = neonTable(clf, 'f1');
+
+  const errClusterEl = document.getElementById('error-cluster-table');
+  if (errClusterEl) {
+    errClusterEl.innerHTML = Array.isArray(errCluster) && errCluster.length
+      ? neonTable(errCluster, 'fn')
+      : '<p class="text-neon-300/40 text-sm">Chưa có dữ liệu FP/FN theo cụm.</p>';
+  }
+
+  const errTypeEl = document.getElementById('error-type-table');
+  if (errTypeEl) {
+    errTypeEl.innerHTML = Array.isArray(errType) && errType.length
+      ? neonTable(errType, 'fn')
+      : '<p class="text-neon-300/40 text-sm">Chưa có dữ liệu FP/FN theo loại sản phẩm.</p>';
+  }
+
+  const heatmapEl = document.getElementById('chart-error-heatmap');
+  if (heatmapEl) {
+    const rows = Array.isArray(errClusterType) ? errClusterType : [];
+    if (!rows.length) {
+      Plotly.newPlot('chart-error-heatmap', [], getLayout({
+        annotations: [{ text: 'Chưa có dữ liệu heatmap FP-FN', showarrow: false, x: 0.5, y: 0.5, xref: 'paper', yref: 'paper' }]
+      }), plotConfig);
+    } else {
+      const clusterSet = [...new Set(rows.map(r => String(r.cluster)))].sort((a, b) => Number(a) - Number(b));
+      const typeOrder = ['L', 'M', 'H', 'Unknown'];
+      const typeSetRaw = [...new Set(rows.map(r => String(r.product_type)))];
+      const typeSet = typeOrder.filter(t => typeSetRaw.includes(t)).concat(typeSetRaw.filter(t => !typeOrder.includes(t)));
+
+      const fnMatrix = clusterSet.map(cl =>
+        typeSet.map(tp => {
+          const row = rows.find(r => String(r.cluster) === cl && String(r.product_type) === tp);
+          return row ? Number(row.fn_rate_on_actual_failures) : 0;
+        })
+      );
+
+      const textMatrix = clusterSet.map(cl =>
+        typeSet.map(tp => {
+          const row = rows.find(r => String(r.cluster) === cl && String(r.product_type) === tp);
+          if (!row) return 'FN: 0<br>FP: 0<br>Samples: 0';
+          return `FN: ${Number(row.fn)}<br>FP: ${Number(row.fp)}<br>Samples: ${Number(row.n_samples)}`;
+        })
+      );
+
+      Plotly.newPlot('chart-error-heatmap', [{
+        type: 'heatmap',
+        x: typeSet,
+        y: clusterSet,
+        z: fnMatrix,
+        colorscale: 'YlOrRd',
+        reversescale: false,
+        text: textMatrix,
+        hovertemplate:
+          'Type: %{x}<br>' +
+          'Cluster: %{y}<br>' +
+          'FN rate on actual failures: %{z:.3f}<br>' +
+          '%{text}<extra></extra>',
+        colorbar: { title: 'FN rate' },
+      }], getLayout({
+        height: 520,
+        margin: { l: 70, r: 30, t: 20, b: 60 },
+        xaxis: { ...getLayout().xaxis, title: 'Product Type' },
+        yaxis: { ...getLayout().yaxis, title: 'Cluster' },
+      }), plotConfig);
+    }
+  }
+}
+
+// ── Association Rules ────────────────────────────
+async function loadAssociation() {
+  const data = await fetch(API + '/api/results/association?limit=20').then(r => r.json());
+  if (!Array.isArray(data) || data.length === 0) {
+    document.getElementById('association-table').innerHTML = '<p class="text-neon-300/40 text-sm">Chưa có luật kết hợp để hiển thị.</p>';
+    Plotly.newPlot('chart-association', [], getLayout({
+      annotations: [{ text: 'Không có dữ liệu luật kết hợp', showarrow: false, x: 0.5, y: 0.5, xref: 'paper', yref: 'paper' }]
+    }), plotConfig);
+    return;
+  }
+
+  const parsed = data.map((r, i) => ({
+    rank: i + 1,
+    rule: String(r.rule || `${r.antecedents || ''} -> ${r.consequents || ''}`),
+    antecedents: String(r.antecedents || ''),
+    consequents: String(r.consequents || ''),
+    support: Number(r.support),
+    confidence: Number(r.confidence),
+    lift: Number(r.lift),
+  })).filter(r => Number.isFinite(r.lift) && r.lift > 0);
+
+  if (!parsed.length) {
+    document.getElementById('association-table').innerHTML = '<p class="text-neon-300/40 text-sm">Không có dữ liệu luật kết hợp hợp lệ.</p>';
+    Plotly.newPlot('chart-association', [], getLayout({
+      height: 620,
+      annotations: [{ text: 'Không có dữ liệu luật kết hợp hợp lệ', showarrow: false, x: 0.5, y: 0.5, xref: 'paper', yref: 'paper' }]
+    }), plotConfig);
+    return;
+  }
+
+  const top = parsed.slice(0, 10);
+  const labels = top.map((r, i) => `R${i + 1}`);
+  const hoverText = top.map(r => r.rule);
+
+  Plotly.newPlot('chart-association', [
+    {
+      x: labels,
+      y: top.map(r => r.lift),
+      type: 'bar',
+      marker: { color: '#00bfff88', line: { color: '#00bfff', width: 1.2 } },
+      text: top.map(r => Number(r.lift).toFixed(2)),
+      textposition: 'outside',
+      cliponaxis: false,
+      customdata: top.map(r => [r.support, r.confidence]),
+      hovertext: hoverText,
+      hovertemplate:
+        'Luật: %{hovertext}<br>' +
+        'Lift: %{y:.2f}<br>' +
+        'Support: %{customdata[0]:.4f}<br>' +
+        'Confidence: %{customdata[1]:.4f}<extra></extra>'
+    }
+  ], getLayout({
+    height: 620,
+    margin: { l: 70, r: 30, t: 20, b: 90 },
+    xaxis: { ...getLayout().xaxis, title: 'Top rules (R1..R10)', tickfont: { size: 13 } },
+    yaxis: { ...getLayout().yaxis, title: 'Lift (cao hơn là mạnh hơn)', tickfont: { size: 13 } },
+  }), plotConfig);
+
+  const tableData = parsed.map((r, i) => ({
+    rank: i + 1,
+    rule: r.rule,
+    support: r.support,
+    confidence: r.confidence,
+    lift: r.lift,
+  }));
+  document.getElementById('association-table').innerHTML = neonTable(tableData, 'lift');
 }
 
 // ── Clustering ──────────────────────────────────
 async function loadClustering() {
-  const data = await fetch(API + '/api/results/clustering').then(r => r.json());
-  const models = data.map(r => r.model);
-  Plotly.newPlot('chart-cluster-sil', [{
-    y: models, x: data.map(r => r.silhouette), type: 'bar', orientation: 'h',
-    marker: {
-      color: data.map(r => r.silhouette > 0 ? '#00bfff88' : '#ff6b6b88'),
-      line: { color: data.map(r => r.silhouette > 0 ? '#00bfff' : '#ff6b6b'), width: 1 }
-    },
-    text: data.map(r => r.silhouette.toFixed(3)), textposition: 'auto',
-    textfont: { color: '#e0f7ff', size: 12 }
-  }], getLayout({
-    margin: { l: 150, r: 20, t: 10, b: 40 },
-    xaxis: { ...getLayout().xaxis, title: 'Silhouette Score' },
-    yaxis: { ...getLayout().yaxis, autorange: 'reversed' },
-  }), plotConfig);
-  document.getElementById('cluster-table').innerHTML = neonTable(data, 'silhouette');
+  const clusterTableEl = document.getElementById('cluster-table');
+  const clusterDebugEl = document.getElementById('cluster-debug');
+  const clusterRankTableEl = document.getElementById('cluster-rank-table');
+  try {
+    const rankFetch = async () => {
+      let res = await fetch(API + '/api/results/cluster_ranking');
+      if (res.status === 404) {
+        res = await fetch(API + '/api/results/cluster-ranking');
+      }
+      if (!res.ok) throw new Error(`cluster_ranking status ${res.status}`);
+      return res.json();
+    };
+
+    const [raw, rankRaw] = await Promise.all([
+      fetch(API + '/api/results/clustering').then(r => r.json()),
+      rankFetch(),
+    ]);
+
+    const pick = (obj, keys, fallback = null) => {
+      for (const k of keys) {
+        if (obj[k] !== undefined && obj[k] !== null) return obj[k];
+        const up = k.toUpperCase();
+        if (obj[up] !== undefined && obj[up] !== null) return obj[up];
+      }
+      return fallback;
+    };
+
+    const rows = Array.isArray(raw)
+      ? raw
+      : (raw && Array.isArray(raw.results) ? raw.results : []);
+
+    const data = rows.map((r, idx) => {
+      const modelRaw = pick(r, ['model'], null);
+      const model = modelRaw ? String(modelRaw) : `config_${idx + 1}`;
+      const silhouette = Number(pick(r, ['silhouette', 'silhouette_score'], NaN));
+      const davies_bouldin = Number(pick(r, ['davies_bouldin', 'dbi'], NaN));
+      const calinski_harabasz = Number(pick(r, ['calinski_harabasz', 'chi'], NaN));
+      return { rank: idx + 1, model, silhouette, davies_bouldin, calinski_harabasz };
+    }).filter(r => Number.isFinite(r.silhouette));
+
+    if (!data.length) {
+      Plotly.newPlot('chart-cluster-sil', [], getLayout({
+        height: 680,
+        annotations: [{
+          text: 'Không có dữ liệu phân cụm hợp lệ từ API',
+          showarrow: false,
+          x: 0.5, y: 0.5, xref: 'paper', yref: 'paper',
+          font: { size: 16, color: isDark() ? '#ff6b6b' : '#b00020' }
+        }]
+      }), plotConfig);
+      clusterTableEl.innerHTML = '<p class="text-red-400 text-sm">Không có dữ liệu phân cụm hợp lệ để hiển thị.</p>';
+      if (clusterRankTableEl) {
+        clusterRankTableEl.innerHTML = '<p class="text-red-400 text-sm">Không có dữ liệu xếp hạng cụm.</p>';
+      }
+      if (clusterDebugEl) {
+        clusterDebugEl.textContent = `debug: rows=${rows.length}, valid=0`;
+      }
+      return;
+    }
+
+    data.sort((a, b) => b.silhouette - a.silhouette);
+
+    const models = data.map(r => r.model);
+    const silVals = data.map(r => r.silhouette);
+    const silMin = Math.min(...silVals);
+    const silMax = Math.max(...silVals);
+    const xMin = Math.min(0, silMin - 0.03);
+    const xMax = silMax + 0.03;
+
+    const traceHorizontal = {
+      y: models,
+      x: silVals,
+      type: 'bar',
+      orientation: 'h',
+      marker: {
+        color: data.map(r => r.silhouette > 0 ? '#00bfff88' : '#ff6b6b88'),
+        line: { color: data.map(r => r.silhouette > 0 ? '#00bfff' : '#ff6b6b'), width: 1.2 }
+      },
+      text: silVals.map(v => v.toFixed(3)),
+      textposition: 'outside',
+      cliponaxis: false,
+      textfont: { color: '#e0f7ff', size: 13 },
+      hovertemplate:
+        'Model: %{y}<br>' +
+        'Silhouette: %{x:.4f}<br>' +
+        'Càng cao càng tách cụm tốt hơn<extra></extra>'
+    };
+
+    const horizontalLayout = getLayout({
+      height: 680,
+      bargap: 0.25,
+      margin: { l: 280, r: 80, t: 20, b: 70 },
+      xaxis: {
+        ...getLayout().xaxis,
+        title: 'Silhouette Score (cao hơn là tốt hơn)',
+        tickformat: '.3f',
+        range: [xMin, xMax]
+      },
+      yaxis: {
+        ...getLayout().yaxis,
+        autorange: 'reversed',
+        automargin: true,
+        type: 'category',
+        tickfont: { size: 13 }
+      },
+    });
+
+    Plotly.newPlot('chart-cluster-sil', [traceHorizontal], horizontalLayout, plotConfig);
+
+    // Fallback: if browser/plotly renders unexpectedly, redraw vertical to guarantee visible bars.
+    if (!models.length || !silVals.some(v => v > 0)) {
+      Plotly.newPlot('chart-cluster-sil', [{
+        x: models,
+        y: silVals,
+        type: 'bar',
+        marker: {
+          color: '#00bfff88',
+          line: { color: '#00bfff', width: 1.2 },
+        },
+        text: silVals.map(v => v.toFixed(3)),
+        textposition: 'outside',
+      }], getLayout({
+        height: 680,
+        margin: { l: 70, r: 30, t: 20, b: 180 },
+        xaxis: { ...getLayout().xaxis, tickangle: -30 },
+        yaxis: { ...getLayout().yaxis, title: 'Silhouette Score', range: [xMin, xMax] },
+      }), plotConfig);
+    }
+
+    const tableData = data.map(r => ({
+      rank: r.rank,
+      model: r.model,
+      silhouette: r.silhouette,
+      davies_bouldin: Number.isFinite(r.davies_bouldin) ? r.davies_bouldin : null,
+      calinski_harabasz: Number.isFinite(r.calinski_harabasz) ? r.calinski_harabasz : null,
+    }));
+
+    clusterTableEl.innerHTML = neonTable(tableData, 'silhouette');
+
+    if (clusterRankTableEl) {
+      const rankRows = Array.isArray(rankRaw)
+        ? rankRaw
+        : (rankRaw && Array.isArray(rankRaw.results) ? rankRaw.results : []);
+
+      const rankData = rankRows.map(r => ({
+        rank: Number(r.rank),
+        cluster: Number(r.cluster),
+        priority_level: r.priority_level,
+        priority_score: Number(r.priority_score),
+        failure_rate: Number(r.failure_rate),
+        n_failures: Number(r.n_failures),
+        count: Number(r.count),
+        avg_tool_wear: Number(r.avg_tool_wear),
+        avg_torque: Number(r.avg_torque),
+      })).filter(r => Number.isFinite(r.rank) && Number.isFinite(r.priority_score));
+
+      clusterRankTableEl.innerHTML = rankData.length
+        ? neonTable(rankData, 'priority_score')
+        : '<p class="text-red-400 text-sm">Không có dữ liệu xếp hạng cụm.</p>';
+    }
+
+    if (clusterDebugEl) {
+      const rankCount = Array.isArray(rankRaw)
+        ? rankRaw.length
+        : (rankRaw && Array.isArray(rankRaw.results) ? rankRaw.results.length : 0);
+      clusterDebugEl.textContent = `debug: rows=${rows.length}, valid=${data.length}, rank_rows=${rankCount}, first_model=${data[0].model}, first_sil=${data[0].silhouette.toFixed(4)}`;
+    }
+  } catch (err) {
+    Plotly.newPlot('chart-cluster-sil', [], getLayout({
+      height: 680,
+      annotations: [{
+        text: 'Lỗi tải dữ liệu phân cụm',
+        showarrow: false,
+        x: 0.5, y: 0.5, xref: 'paper', yref: 'paper',
+        font: { size: 16, color: isDark() ? '#ff6b6b' : '#b00020' }
+      }]
+    }), plotConfig);
+    clusterTableEl.innerHTML = `<p class="text-red-400 text-sm">Lỗi tải dữ liệu phân cụm: ${err.message}</p>`;
+    if (clusterRankTableEl) {
+      clusterRankTableEl.innerHTML = `<p class="text-red-400 text-sm">Lỗi tải bảng xếp hạng cụm: ${err.message}</p>`;
+    }
+    if (clusterDebugEl) {
+      clusterDebugEl.textContent = `debug error: ${err.message}`;
+    }
+  }
 }
 
 // ── Anomaly ─────────────────────────────────────
@@ -209,7 +514,10 @@ async function loadRegression() {
 
 // ── Semi-supervised ─────────────────────────────
 async function loadSemiSupervised() {
-  const data = await fetch(API + '/api/results/semi_supervised').then(r => r.json());
+  const [data, pseudoRisk] = await Promise.all([
+    fetch(API + '/api/results/semi_supervised').then(r => r.json()),
+    fetch(API + '/api/results/pseudo_label_risk').then(r => r.json()),
+  ]);
   const methods = [...new Set(data.map(r => r.method))];
   const colors = { supervised_only: '#00bfff', self_training: '#00ff88', label_spreading: '#ffd60a' };
   const traces = methods.map(m => {
@@ -228,6 +536,24 @@ async function loadSemiSupervised() {
     yaxis: { ...getLayout().yaxis, title: 'F1 Score' },
   }), plotConfig);
   document.getElementById('semi-table').innerHTML = neonTable(data, 'f1');
+
+  const pseudoRiskEl = document.getElementById('pseudo-risk-table');
+  if (pseudoRiskEl) {
+    const normalized = Array.isArray(pseudoRisk)
+      ? pseudoRisk.map(r => ({
+          label_pct: Number(r.label_pct),
+          n_unlabeled: Number(r.n_unlabeled),
+          n_pseudo_positive: Number(r.n_pseudo_positive),
+          pseudo_fp_false_alarm: Number(r.pseudo_fp_false_alarm),
+          pseudo_false_alarm_rate: Number(r.pseudo_false_alarm_rate),
+          pseudo_miss_rate_on_unlabeled_failures: Number(r.pseudo_miss_rate_on_unlabeled_failures),
+          pseudo_precision: Number(r.pseudo_precision),
+        }))
+      : [];
+    pseudoRiskEl.innerHTML = normalized.length
+      ? neonTable(normalized, 'pseudo_false_alarm_rate')
+      : '<p class="text-neon-300/40 text-sm">Chưa có báo cáo rủi ro pseudo-label.</p>';
+  }
 }
 
 // ── Scatter Explorer ────────────────────────────
@@ -450,6 +776,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     // Lazy load
     const tab = btn.dataset.tab;
     if (tab === 'classification') loadClassification();
+    else if (tab === 'association') loadAssociation();
     else if (tab === 'clustering') loadClustering();
     else if (tab === 'anomaly') loadAnomaly();
     else if (tab === 'regression') loadRegression();

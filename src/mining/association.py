@@ -17,12 +17,19 @@ class AssociationMiner:
     """
 
     def __init__(self, params: Dict):
-        self.params = params
-        mining_cfg = params.get("mining", {}).get("apriori", {})
+        self.params = params if isinstance(params, dict) else {}
+        # Accept either full params (with mining.apriori) or apriori-only config.
+        if isinstance(self.params, dict) and "mining" in self.params:
+            mining_cfg = self.params.get("mining", {}).get("apriori", {})
+            self.data_cfg = self.params.get("data", {})
+        else:
+            mining_cfg = self.params
+            self.data_cfg = {}
         self.min_support = mining_cfg.get("min_support", 0.01)
         self.min_confidence = mining_cfg.get("min_confidence", 0.5)
         self.min_lift = mining_cfg.get("min_lift", 1.5)
         self.max_len = mining_cfg.get("max_len", 4)
+        self.policy = mining_cfg.get("policy", {})
         self.frequent_itemsets = None
         self.rules = None
 
@@ -66,10 +73,57 @@ class AssociationMiner:
 
         # Lọc theo lift
         self.rules = self.rules[self.rules["lift"] >= self.min_lift]
-        self.rules = self.rules.sort_values("lift", ascending=False).reset_index(drop=True)
+
+        # Enforce rule direction and anti-leakage policy for actionable maintenance rules.
+        self.rules = self.filter_actionable_rules(self.rules)
+        self.rules = self.rules.sort_values(["lift", "confidence", "support"], ascending=False).reset_index(drop=True)
 
         print(f"[association] Found {len(self.rules)} rules (lift >= {self.min_lift})")
         return self.frequent_itemsets, self.rules
+
+    def filter_actionable_rules(self, rules_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apply policy to keep operationally useful rules:
+        - many -> one (antecedent length >= 2, consequent length == 1)
+        - consequents limited to target/failure outcomes
+        - remove leakage-like antecedents containing failure labels
+        """
+        if rules_df is None or len(rules_df) == 0:
+            return pd.DataFrame(columns=getattr(rules_df, "columns", []))
+
+        policy = self.policy if isinstance(self.policy, dict) else {}
+        rule_mode = policy.get("rule_mode", "many_to_one")
+        min_ant_len = int(policy.get("min_antecedent_len", 2))
+        max_con_len = int(policy.get("max_consequent_len", 1))
+
+        target = self.data_cfg.get("target", "Machine failure")
+        failure_types = self.data_cfg.get("failure_types", [])
+        allowed_consequents = policy.get("allowed_consequents", [target] + list(failure_types))
+        allowed_consequents = set(map(str, allowed_consequents))
+
+        exclude_failure_in_ant = bool(policy.get("exclude_failure_in_antecedents", True))
+        forbidden_ant = set([target] + list(failure_types)) if exclude_failure_in_ant else set()
+
+        out = rules_df.copy()
+
+        if rule_mode == "many_to_one":
+            out = out[out["antecedents"].apply(lambda s: len(s) >= min_ant_len)]
+            out = out[out["consequents"].apply(lambda s: len(s) <= max_con_len)]
+
+        out = out[
+            out["consequents"].apply(
+                lambda s: len(set(map(str, s)) - allowed_consequents) == 0 and len(s) > 0
+            )
+        ]
+
+        if forbidden_ant:
+            out = out[
+                out["antecedents"].apply(
+                    lambda s: len(set(map(str, s)) & forbidden_ant) == 0
+                )
+            ]
+
+        return out.reset_index(drop=True)
 
     def get_failure_rules(self, failure_col: str = "Machine failure") -> pd.DataFrame:
         """Lọc luật có consequent chứa failure."""

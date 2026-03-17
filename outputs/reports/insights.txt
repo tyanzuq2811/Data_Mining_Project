@@ -1,0 +1,19 @@
+============================================================
+INSIGHTS & KHUYẾN NGHỊ HÀNH ĐỘNG
+============================================================
+
+1. ƯU TIÊN BẢO TRÌ THEO CỤM: Các cụm có failure rate cao (cluster profiling) nên được kiểm tra thường xuyên hơn. Đặc biệt máy thuộc cụm có tool wear cao + torque cao cần lịch bảo trì dày hơn (giảm từ 30 ngày → 15 ngày).
+
+2. GIÁM SÁT TEMP_DIFF: Khi chênh lệch nhiệt độ (Process - Air) < 8.6K kết hợp tốc độ quay < 1380 rpm → nguy cơ Heat Dissipation Failure cao. Lắp cảnh báo realtime cho điều kiện này.
+
+3. NGƯỠNG TOOL WEAR: Tool wear > 200 phút kết hợp torque > 50 Nm → nguy cơ Overstrain Failure. Khuyến nghị thay dụng cụ khi tool wear đạt 180 phút (buffer 20 phút an toàn).
+
+4. SỬ DỤNG PR-AUC THAY VÌ ACCURACY: Do dataset imbalanced (3.39% failure), accuracy >96% nhưng vô nghĩa. PR-AUC phản ánh đúng khả năng phát hiện lỗi. Đề xuất dùng PR-AUC làm metric chính trong production.
+
+5. POWER MONITORING: Công suất (Torque × Speed) ngoài khoảng [3500, 9000]W → Power Failure. Thiết lập dashboard giám sát power realtime với cảnh báo khi vượt ngưỡng.
+
+6. SEMI-SUPERVISED KHI ÍT NHÃN: Khi chỉ có 5-10% nhãn failure, Self-Training với threshold 0.95 cải thiện F1 so với supervised-only. Tuy nhiên cần kiểm soát false positive (false alarm) kỹ để tránh bảo trì thừa.
+
+7. SẢN PHẨM TYPE L RỦI RO CAO HƠN: Product type L (Low quality) có failure rate cao hơn type H và M. Nên tăng tần suất kiểm tra cho sản phẩm type L, đồng thời xem xét nâng cấp quy trình sản xuất cho nhóm này.
+
+============================================================

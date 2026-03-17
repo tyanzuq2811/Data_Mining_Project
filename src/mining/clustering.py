@@ -21,6 +21,15 @@ class ClusterAnalyzer:
 
     def __init__(self, params: Dict):
         self.params = params
+        # Accept either full params (with mining.clustering) or clustering-only config.
+        if isinstance(params, dict) and "mining" in params:
+            self.clustering_cfg = params.get("mining", {}).get("clustering", {})
+            self.seed = params.get("seed", 42)
+            self.target_col = params.get("data", {}).get("target", "Machine failure")
+        else:
+            self.clustering_cfg = params if isinstance(params, dict) else {}
+            self.seed = self.clustering_cfg.get("seed", 42)
+            self.target_col = self.clustering_cfg.get("target", "Machine failure")
         self.models = {}
         self.labels = {}
         self.scores = {}
@@ -33,30 +42,36 @@ class ClusterAnalyzer:
         """
         Chạy KMeans với nhiều giá trị k, trả về evaluation cho mỗi k.
         """
-        k_range = self.params["mining"]["clustering"]["kmeans"]["n_clusters_range"]
+        k_range = self.clustering_cfg["kmeans"]["n_clusters_range"]
         results = {}
 
         for k in k_range:
-            model = KMeans(n_clusters=k, random_state=self.params["seed"], n_init=10)
+            model = KMeans(n_clusters=k, random_state=self.seed, n_init=10)
             labels = model.fit_predict(X)
             scores = self._evaluate_clustering(X, labels)
             results[k] = {
                 "model": model,
                 "labels": labels,
                 "inertia": model.inertia_,
+                "n_clusters": len(set(labels)),
+                "coverage_ratio": 1.0,
                 **scores,
             }
             self.models[f"kmeans_k{k}"] = model
             self.labels[f"kmeans_k{k}"] = labels
-            self.scores[f"kmeans_k{k}"] = scores
+            self.scores[f"kmeans_k{k}"] = {
+                **scores,
+                "n_clusters": len(set(labels)),
+                "coverage_ratio": 1.0,
+            }
 
         print(f"[clustering] KMeans fitted for k = {k_range}")
         return results
 
     def fit_dbscan(self, X: np.ndarray) -> Dict[str, Dict]:
         """Chạy DBSCAN với nhiều (eps, min_samples)."""
-        eps_range = self.params["mining"]["clustering"]["dbscan"]["eps_range"]
-        min_samples_range = self.params["mining"]["clustering"]["dbscan"]["min_samples_range"]
+        eps_range = self.clustering_cfg["dbscan"]["eps_range"]
+        min_samples_range = self.clustering_cfg["dbscan"]["min_samples_range"]
         results = {}
 
         for eps in eps_range:
@@ -65,6 +80,7 @@ class ClusterAnalyzer:
                 labels = model.fit_predict(X)
                 n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
                 n_noise = (labels == -1).sum()
+                coverage_ratio = float((labels != -1).mean())
 
                 key = f"dbscan_eps{eps}_ms{ms}"
                 if n_clusters >= 2:
@@ -77,19 +93,25 @@ class ClusterAnalyzer:
                     "labels": labels,
                     "n_clusters": n_clusters,
                     "n_noise": n_noise,
+                    "coverage_ratio": coverage_ratio,
                     **scores,
                 }
                 self.models[key] = model
                 self.labels[key] = labels
-                self.scores[key] = scores
+                self.scores[key] = {
+                    **scores,
+                    "n_clusters": n_clusters,
+                    "n_noise": n_noise,
+                    "coverage_ratio": coverage_ratio,
+                }
 
         print(f"[clustering] DBSCAN fitted for {len(results)} configurations")
         return results
 
     def fit_hierarchical(self, X: np.ndarray) -> Dict[int, Dict]:
         """Chạy Hierarchical Clustering (HAC)."""
-        k_range = self.params["mining"]["clustering"]["hierarchical"]["n_clusters_range"]
-        linkage = self.params["mining"]["clustering"]["hierarchical"]["linkage"]
+        k_range = self.clustering_cfg["hierarchical"]["n_clusters_range"]
+        linkage = self.clustering_cfg["hierarchical"]["linkage"]
         results = {}
 
         for k in k_range:
@@ -101,11 +123,17 @@ class ClusterAnalyzer:
             results[k] = {
                 "model": model,
                 "labels": labels,
+                "n_clusters": len(set(labels)),
+                "coverage_ratio": 1.0,
                 **scores,
             }
             self.models[key] = model
             self.labels[key] = labels
-            self.scores[key] = scores
+            self.scores[key] = {
+                **scores,
+                "n_clusters": len(set(labels)),
+                "coverage_ratio": 1.0,
+            }
 
         print(f"[clustering] Hierarchical fitted for k = {k_range}")
         return results
@@ -134,10 +162,21 @@ class ClusterAnalyzer:
         best_name = None
         best_score = -np.inf if metric != "davies_bouldin" else np.inf
 
+        sel_cfg = self.clustering_cfg.get("selection", {}) if isinstance(self.clustering_cfg, dict) else {}
+        min_coverage = sel_cfg.get("min_coverage_ratio", 0.5)
+        min_clusters = sel_cfg.get("min_clusters", 2)
+
         for name, scores in self.scores.items():
             s = scores.get(metric, None)
             if s is None:
                 continue
+            coverage = scores.get("coverage_ratio", 1.0)
+            n_clusters = scores.get("n_clusters", 0)
+
+            # Guardrail: avoid selecting models that cluster only tiny subset or collapse to <2 clusters.
+            if coverage < min_coverage or n_clusters < min_clusters:
+                continue
+
             if metric == "davies_bouldin":
                 if s < best_score:
                     best_score = s
@@ -146,6 +185,21 @@ class ClusterAnalyzer:
                 if s > best_score:
                     best_score = s
                     best_name = name
+
+        # Fallback if all candidates are filtered out.
+        if best_name is None:
+            for name, scores in self.scores.items():
+                s = scores.get(metric, None)
+                if s is None:
+                    continue
+                if metric == "davies_bouldin":
+                    if s < best_score:
+                        best_score = s
+                        best_name = name
+                else:
+                    if s > best_score:
+                        best_score = s
+                        best_name = name
 
         self.best_model_name = best_name
         self.best_labels = self.labels.get(best_name)
@@ -162,7 +216,7 @@ class ClusterAnalyzer:
         df_prof["cluster"] = labels
 
         # Thêm failure info nếu có
-        target = self.params["data"]["target"]
+        target = self.target_col
         if target in df.columns:
             df_prof[target] = df[target].values
 
