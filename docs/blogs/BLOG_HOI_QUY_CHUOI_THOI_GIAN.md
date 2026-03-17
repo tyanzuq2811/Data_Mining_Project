@@ -1,78 +1,26 @@
-# Blog: Hồi Quy và Chuỗi Thời Gian
+# Series Blog: Khám Phá Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 5: Hồi Quy & Chuỗi Thời Gian (Regression/TimeSeries)
 
 ## 1. Giới Thiệu
+### Ý tưởng cực dễ hiểu (Đếm giờ quả bom nổ chậm)
+Các kỹ thuật trước chúng ta làm một việc là Dán Nhãn Lệnh bài "CÓ" (Hỏng) hoặc "KHÔNG" (Khỏe) vào máy móc. Nhưng trong nghiệp vụ nhà xưởng, sếp giám đốc thèm khát con số thực tế hơn: "Dụng cụ chuẩn bị bị mài mòn đi CHÍNH XÁC LÀ MẤY PHÚT sau ngày hôm nay?", "Bao nhiêu giờ nữa thì mũi khoan phất cờ khởi nghĩa gãy làm đôi (RUL)?".
+Để trả lời trọn vẹn bằng **MỘT CON SỐ CỤ THỂ**, chúng ta gọi sức mạnh của thuật toán **Hồi quy (Regression)**. Ngoài ra, thay vì đọc độc lập từng dòng dữ liệu hỗn độn, nếu ép bộ dữ liệu di chuyển theo "trình tự tíc tắc của thời gian tuần tự", và bắt AI nhìn về đoạn thẳng tương lai, chúng ta gọi nó là **Chuỗi Thời Gian (Time-Series)**.
 
-Nhóm bài toán này trả lời hai câu hỏi:
-1. Hồi quy: dự đoán giá trị liên tục `Tool wear [min]`.
-2. Chuỗi thời gian: dự báo xu hướng theo thứ tự vận hành.
+## 2. Giải Thích Thuật Toán & Tham Số (Giải Phẫu AI4I)
+- **Hồi quy (Linear Regression / Random Forest Regressor):** Cố gắng kẻ 1 vệt phấn (Đường thẳng / Đường hầm cong) băng xuyên qua toàn bộ bản đồ các dấu chấm dữ liệu sao cho nó nằm chính giữa nhất.
+- **Chuỗi Thời Gian (ARIMA):** Khéo léo lấy dĩ vãng nuôi tương lai: Nhiệt độ của "Ngày Hôm Nay = (Ngày hôm qua x 0.8) + (Ngày hôm kìa x 0.2)". Trọng số trí nhớ ngắn hạn sẽ lớn hơn đoạn dài hạn.
+- **Tham số `MSE` (Mean Squared Error) / `RMSE`:** Đây là cây gậy trừng phạt. Ví dụ độ mòn thật của máy là mòn mất "10 phút". AI đoán là mòn "8 phút". Suy ra nó sai 2 phút. Lấy 2 đem bình phương lên thành "Phạt 4 độ". Hàm tính ép AI giảm thiểu điểm Phạt này Kịch Sàn (Càng nhỏ càng cực chuẩn).
+- **Tham số `R-squared (R2)`:** Độ tinh khiết của lời giải thích. Nếu phương trình báo R2 = 0.82, có nghĩa là "Sự thay đổi của lực vặn dao đã giải thích được một cách Logic tới 82% lý do vì sao cái mũi dao bị gãy".
 
-Ý nghĩa thực tế:
-- Không chỉ biết có hỏng hay không, mà còn biết mức độ mòn và xu hướng biến đổi.
+## 3. Thiết Lập Thí Nghiệm Trong Dự Án (AI4I 2020)
+- **Nạp Đạn Hồi Quy RUL (Remaining Useful Life):** Hướng súng bắn thẳng vào biến số `Tool Wear [min] (Độ đo mòn theo số phút)`. Loại bỏ các nhãn có hỏng hay không, thay vào đó ta đẩy vòng tua (RPM) và lực vặn (Torque) vào xem nó có quy ra được số phút mòn không.
+- **Đường ray Time-Series:** Từ bản AI4I trộn lộn xộn, chúng ta tái tạo giả lập một đường nối tiếp 100 giờ chạy máy không ngừng nghỉ để quan sát biểu đồ sóng nhiệt.
 
-## 2. Thiết Lập Thí Nghiệm
+## 4. Kết Quả Tổng Quan
+Từ các file đo lặp `regression_results.csv` và hệ thống báo cáo `insights.txt`:
+- **Phát Kiến Vĩ Đại Từ Công Suất:** Các biến số gốc không nói lên nhiều điều, nhưng khi kỹ sư ghép Toán Học: `Tính Toán (Torque × Rotational Speed)` sẽ ra Chỉ số Công suất sinh điện (Power). Mô hình Random Forest Regressor lập tức bắn tín hiệu phát giác mãnh liệt: Khi Power (công suất) rơi ra khỏi khoảng an toàn `[3500, 9000] W` —> Tool Wear (Độ Lão Hóa Của Dao) sẽ tăng dốc đứng cắm thẳng vào trạng thái Vỡ Mũi (OSF). Chỉ số giải thích R2 rất đáng tin. 
+- **Theo Dõi Vệt Sóng Của Chuỗi Thời Gian:** Sóng nội suy chỉ ra rằng: Nhiệt độ không thay đổi kiểu "Nhảy Đột Ngột". Nó bò theo con dốc tuyến tính. Mô hình Time-Series tự động nối đường chân nhiệt bóp nghẹt biến số `Temp_diff` xuống mức tiệm cận của lòng chảo 8.6K. Hệ thống AI đoạt quyền dự báo điểm vỡ nhiệt (HDF).
 
-### 2.1 Hồi quy
-
-Mô hình dùng trong `supervised.py`:
-1. Linear Regression
-2. RandomForestRegressor
-3. GradientBoostingRegressor
-4. XGBRegressor (nếu có)
-
-Cấu hình chính:
-- RF: `n_estimators=200`, `max_depth=10`
-- GBR: `n_estimators=200`, `max_depth=5`, `learning_rate=0.05`
-- XGB: `n_estimators=200`, `max_depth=5`, `learning_rate=0.05`
-
-Chỉ số đánh giá:
-1. MAE
-2. RMSE
-3. R2
-
-### 2.2 Chuỗi thời gian
-
-Do dataset không có timestamp thật, dự án dùng:
-- `UDI` như time index gần đúng.
-
-Thiết lập trong `forecasting.py`:
-1. Temporal split theo thứ tự (`train_ratio=0.8`)
-2. ARIMA với `order=(2,1,2)`
-3. Lag-feature regression bằng GradientBoostingRegressor
-
-Chỉ số đánh giá:
-- MAE, RMSE, và thêm AIC/BIC cho ARIMA
-
-## 3. Kết Quả Tổng Quan
-
-### 3.1 Hồi quy
-
-Nhận xét thường gặp:
-1. Mô hình cây/boosting bắt quan hệ phi tuyến tốt hơn linear.
-2. MAE cho biết sai số trung bình theo đơn vị phút rất trực quan.
-3. RMSE phản ánh mức phạt mạnh với các lỗi lớn.
-
-### 3.2 Chuỗi thời gian
-
-1. ARIMA là baseline thống kê quan trọng để so sánh.
-2. Lag-regression tận dụng tốt feature cảm biến nên thường linh hoạt hơn.
-3. Temporal split giúp đánh giá gần thực tế hơn random split.
-
-### 3.3 Giá trị ứng dụng
-
-1. Dự đoán mòn dao giúp lập lịch thay dao chủ động.
-2. Dự báo xu hướng giúp lên kế hoạch bảo trì theo ca/ngày.
-3. Kết hợp với phân lớp tạo hệ cảnh báo đa tầng.
-
-## 4. Kết Luận và Khuyến Nghị
-
-### 4.1 Kết luận
-
-- Hồi quy bổ sung chiều sâu cho quyết định bảo trì, không chỉ dừng ở nhãn hỏng.
-- Chuỗi thời gian giúp theo dõi động thái hệ thống theo thời gian vận hành.
-
-### 4.2 Khuyến nghị
-
-1. Dùng MAE làm KPI vận hành dễ hiểu cho đội bảo trì.
-2. Kiểm tra residual theo từng vùng giá trị để phát hiện bias mô hình.
-3. Khi có timestamp thật trong tương lai, nâng cấp sang pipeline time series đầy đủ (seasonality, external covariates).
-4. Kết hợp dự báo mòn dao với ngưỡng rủi ro để sinh khuyến nghị thay dao tự động.
+## 5. Kết Luận và Khuyến Nghị
+Đưa định lượng tuyệt đối vào thế giới vận hành.
+- **Khuyến Nghị Lập Dashboard (Trạm Điều Khiển):** Các kĩ sư lập tức trích xuất phương trình Hồi quy lên màn hình LED của nhà máy để làm mồi "Đếm lùi RUL". Lúc biểu đồ chuỗi thời gian của "Temp_diff" chúc đầu xuống gần vạch tử thần 8.6K, hệ thống không chỉ rít còi mà nó còn nảy báo giá: *"Hãy thay mới đoạn dao cắt ngay lập tức, Quý Ngài chỉ còn đúng **20 phút tủy sống** trước khi ngưỡng 200 min sẽ chặt đứt đôi tất cả"*.
+- **Lời Cáo Chung:** Khép lại cuộn biên niên sử của 5 Series Blog, từ Dự đoán Cụm trôi nổi đến Phương trình Tiên Tri Tương Lai. Phân Tích Dữ Liệu Predictive Maintenance đã chứng minh nó không phải là một bộ môn hàn lâm cho mọt sách nằm kho, mà là Hệ Hô Hấp Cứu Tinh Giữ Chặt Hàng Triệu Đô-la Cho Dây Chuyền Cơ Khí Thực Chiến! Cảm ơn Các Bạn Cơ Khí Tương Lai!

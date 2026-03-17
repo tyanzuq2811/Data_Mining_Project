@@ -1,103 +1,29 @@
-# Blog: Phân Lớp (Classification)
+# Series Blog: Khám Phá Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 3: Phân Lớp (Classification)
 
 ## 1. Giới Thiệu
+### Ý tưởng cực dễ hiểu (Hội đồng Trọng tài bắt gian lận)
+Phân lớp (Classification) có giám sát giống hệt như trường học phát cho bạn một chồng 10,000 bài làm và đưa kèm LUÔN ĐÁP ÁN (Nhãn - Máy hư = Lỗi, Máy sống = Không lỗi). Mô hình học sinh AI sẽ ráng "thuộc lòng" và rút kinh nghiệm từ bộ trắc nghiệm này để chấm thi những cái máy móc của ngày mai.
+Nhưng tại trạm bơm AI4I, cạm bẫy lớn nhất là: **Lỗi quá HIẾM!**. Bạn mang 10,000 cái máy chạy mới có đúng 339 cái văng miểng (Nhãn hỏng là Số 1). Nếu học sinh AI siêu lười biếng phán bừa: "100% tất cả máy móc tôi nhận đều là Sống (Số 0)", AI đó nghiễm nhiên lãnh 96.6% điểm Accuracy (Độ chính xác) nhưng THỰC CHẤT là một cỗ máy thảm hoạ vì mù lòa khi đâm trực diện 339 vụ tai nạn chết chóc (False Negative - Bỏ lọt Hư hỏng). 
 
-Đây là bài toán trung tâm của đồ án:
-- Dự đoán `Machine failure` (0/1) từ dữ liệu cảm biến.
+## 2. Giải Thích Thuật Toán & Tham Số (Kèm phân tích bộ AI4I)
+Người đại diện chống mù này gọi là **Họ Boosting/Cây Quyết Định (Ví dụ: LightGBM, Gradient Boosting)**. 
+- *Cách nó làm việc:* Thay vì giao cho 1 đứa học sinh giải toán, nó thuê 100 đứa học sinh yếu nhưng đứa học sinh thứ 2 sẽ CỐ TÌNH MỞ TO MẮT sửa lỗi sai của đứa học sinh thứ nhất. Đứa số 3 nhìn vào cái sai của đứa số 2 rồi vá dần.
+- **Tham số `n_estimators`:** Trong bài toán này là lượng cây, kiểu "gọi bao nhiêu học sinh vào sửa bài chéo". Quá ít thì bắt hụt lỗi, gọi 500 cây thì máy nhà xưởng lag đơ.
+- **Tham số `learning_rate`:** Mức độ rụt rè. Tốc độ sửa bài quá nhanh thì dễ đi lố (nhận diện nhầm), quá chậm (0.01) thì AI học siêu lâu.
 
-Thách thức lớn nhất:
-- Dữ liệu mất cân bằng nặng (failure ~3.39%).
+## 3. Thiết Lập Thí Nghiệm Trong Dự Án (AI4I 2020)
+- **Tuyệt chiêu SMOTE (Chống học vẹt):** Chỉ có vỏn vẹn 3% nhãn lỗi nên ta dùng Oversampling. Hiểu đơn giản là kỹ sư sẽ tạo ra 9,000 cái Nhãn Lỗi Gỉả từ 339 cái thật đó và nhồi vào giáo án, bắt AI đọc lại. "Đọc đến khi nào quen mặt dấu hiệu vỡ dao thì thôi!".
+- **Từ Chối Accuracy, Dùng PR-AUC & F1-Score:** 
+  - *Precision:* Trong 100 lần AI túm còi báo "Máy đang nổ", có bao nhiêu lần là nổ thật? (Tránh báo động giả gây tốn tiền nhân viên đi kiểm tra). 
+  - *Recall:* Trong CẢ NHÀ MÁY có thật 339 cái vỡ, AI bắt được mấy cái? Ghi điểm PR-AUC là thước đo chung dung hòa được 2 kẻ thù này.
 
-Vì vậy chiến lược đánh giá không thể chỉ nhìn Accuracy.
-Trong đồ án, trọng tâm là:
-1. F1-score
-2. PR-AUC
-3. Recall cho lớp lỗi
+## 4. Kết Quả Tổng Quan
+Cập nhật bảng phong thần từ file đào tạo `classification_results.csv`:
+- **Gradient Boosting (GBM):** Đủ tốt (F1 = 0.841, PR-AUC = 0.846) nhưng ngâm mình rất lâu (Tốn tới ~24.9 giây để chấm bài).
+- **Ông Hoàng LightGBM:** Nhờ chia khung Histogram xé nhỏ bảng dữ liệu mà LightGBM bọc lọt điểm **PR-AUC Lớn Nhất (0.8896)** (Rất ít khi báo động nhầm), mang về chức vô địch Recall (Tóm được 86.7% tất cả các lỗi có thật chôn dấu trong máy). Chưa kể điểm mạnh nhất là nó chỉ mất đúng **3.2 giây** vèo qua là học xong.
+- **Random Forest:** Dù đứng kế bảng, nhưng do cây học quá độc lập nên chỉ đạt PR-AUC 0.79, không sửa được những dòng lỗi khó xơi như LightGBM.
 
-## 2. Thiết Lập Thí Nghiệm
-
-### 2.1 Dữ liệu và chia tập
-
-1. Dùng dữ liệu đã preprocess + feature engineering.
-2. Loại cột leakage khi train.
-3. Chia train/test theo stratified split để giữ tỷ lệ lớp.
-4. Chuẩn hóa đầu vào trước train.
-
-### 2.2 Các mô hình được huấn luyện
-
-Trong `src/models/supervised.py`:
-1. Logistic Regression
-2. Random Forest
-3. Gradient Boosting
-4. XGBoost (nếu môi trường có cài)
-5. LightGBM (nếu môi trường có cài)
-
-### 2.3 Cấu hình chính đang dùng
-
-Logistic Regression:
-- `C=1.0`, `max_iter=1000`, `class_weight='balanced'`
-
-Random Forest:
-- `n_estimators=200`, `max_depth=10`, `min_samples_split=5`, `class_weight='balanced'`
-
-Gradient Boosting:
-- `n_estimators=200`, `max_depth=5`, `learning_rate=0.05`
-
-XGBoost:
-- `n_estimators=200`, `max_depth=5`, `learning_rate=0.05`, `scale_pos_weight=28.5`
-
-LightGBM:
-- `n_estimators=200`, `max_depth=5`, `learning_rate=0.05`, `is_unbalance=True`
-
-Cross-validation:
-- StratifiedKFold, `cv=5`
-
-### 2.4 Chỉ số đánh giá
-
-1. F1: cân bằng Precision/Recall.
-2. PR-AUC: phù hợp dữ liệu lệch lớp.
-3. ROC-AUC: mức phân biệt tổng quát.
-4. Precision/Recall: đánh đổi false alarm và miss.
-5. Train time: chi phí tính toán.
-
-## 3. Kết Quả Tổng Quan
-
-### 3.1 So sánh tổng quan
-
-Thông thường trong bài toán này:
-1. Tree-based boosting (Gradient Boosting/XGBoost/LightGBM) cho kết quả mạnh.
-2. Logistic Regression là baseline dễ giải thích, hiệu quả ổn định.
-3. Random Forest cân bằng tốt giữa hiệu năng và độ ổn định.
-
-### 3.2 Góc nhìn vận hành
-
-Trong bảo trì dự đoán:
-- Bỏ sót lỗi (false negative) thường đắt hơn cảnh báo nhầm.
-
-Vì vậy nên ưu tiên:
-1. Recall và PR-AUC tốt.
-2. F1 đủ cao để không cảnh báo tràn lan.
-
-### 3.3 Ý nghĩa feature importance
-
-Feature importance giúp trả lời:
-- Mô hình dựa vào tín hiệu nào nhiều nhất.
-
-Trong bối cảnh AI4I, các nhóm biến thường quan trọng:
-1. Mài mòn dao cụ.
-2. Mô-men xoắn và công suất.
-3. Đặc trưng nhiệt và tương tác nhiệt-tải.
-
-## 4. Kết Luận và Khuyến Nghị
-
-### 4.1 Kết luận
-
-- Phân lớp là thành phần ra quyết định chính trong hệ thống.
-- Cách đánh giá đúng (F1/PR-AUC) quan trọng ngang hoặc hơn việc đổi thuật toán.
-
-### 4.2 Khuyến nghị
-
-1. Giữ metric ưu tiên là PR-AUC + F1 cho lớp lỗi.
-2. Cân chỉnh threshold theo mục tiêu vận hành (an toàn vs false alarm).
-3. Theo dõi drift dữ liệu và retrain định kỳ.
-4. Kết hợp mô hình phân lớp với luật kết hợp để tăng khả năng giải thích.
+## 5. Kết Luận và Khuyến Nghị
+Đè đầu máy đọc số liệu và tránh xa bảng điểm Accuracy ảo ma.
+- **Khuyến nghị Lắp Đặt:** Gắn thẳng bộ não `LightGBM` vào chuỗi truyền tải dây chuyền. Tiếp tục căn chỉnh ngưỡng Threshold xuống một tí để tăng tối đa điểm `Recall` (Thà phán báo động nhầm còn hơn bỏ lọt tên tội phạm).
+- Ở bài sau, nếu người thu thập dữ liệu lại quá bận rộn để rải nhãn 0 với 1 này nữa thì ta làm gì? Mời đọc tiếp: Phép thuật Cầu Cảng của **Học Bán Giám Sát**.

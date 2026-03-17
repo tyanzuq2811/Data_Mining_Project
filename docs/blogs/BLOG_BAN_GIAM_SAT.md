@@ -1,93 +1,25 @@
-# Blog: Bán Giám Sát (Semi-supervised Learning)
+# Series Blog: Khám Phá Tri Thức Từ Dữ Liệu Predictive Maintenance - Phần 4: Bán Giám Sát (Semi-Supervised)
 
 ## 1. Giới Thiệu
+### Ý tưởng cực dễ hiểu (Học bài gốc để tự điền đáp án mạo danh)
+Trong một nhà máy AI4I, thông số quay, nhiệt độ nhả về từ hệ thống cảm biến (Sensor) đếm tới hàng vạn dòng. Tuy nhiên để biết một cái mốc máy lúc 12:00 "Hư hay Sống" thì phải có anh kỹ sư nhập tay vào File Excel (Gọi là Nhãn - Label). Nhưng chẳng ai rảnh để canh gác 10,000 dòng cả, vậy dữ liệu thu về bị **"Mồ Côi Đáp Án"**.
+Học bán giám sát sinh ra để gỡ bom: Đó là 1 học sinh giỏi được dạy kiến thức lõi thông qua 10 quyển sách có điểm sẵn, tự đúc kết kinh nghiệm rồi dũng cảm lấy bút ghi "Đáp án giả / Nhãn mạo danh (Pseudo-label)" cho 90 quyển sách trống rỗng chưa ai thèm đánh dấu. Biến đống tài liệu mồ côi thành Mỏ vàng khổng lồ.
 
-Bài toán bán giám sát trả lời câu hỏi thực tế:
-- Nếu chỉ có một phần nhỏ dữ liệu được gán nhãn, mô hình còn tốt không?
+## 2. Giải Thích Thuật Toán & Tham Số (Kèm Phân Tính AI4I)
+Thuật toán ta vận hành có tên gọi **Self-Training Classifier (Máy phân loại tự huấn luyện)**. Nó ôm bên trong một bộ não (Nhân) tự chọn: Ta chọn dùng trái tim của LightGBM hoặc Random Forest đặt vào.
+- **Cách nó xoay vòng:** Ăn trước 10% Nhãn chuẩn. Cầm kiến thức lao vào 90% dòng trống còn lại, nếu nó nhận diện được 1 dòng: *"Tao cực kì tự tin cái mức chênh nhiệt 8.7K này là Máy sẽ Hỏng với xác suất khẳng định 98%"*. Thuật toán sẽ ngay lập tức phết chữ "Hỏng" vào ô trống, tự biến đó thành tài sản huấn luyện ở Vòng lặp thứ 2.
+- **Tham số `Threshold` (Ngưỡng tự tin/Ngưỡng cảnh giác):** Đây là vòng kim cô quan trọng nhất. Nếu set ngưỡng thấp (0.6), học sinh sẽ láo toét, nhìn đâu cũng thấy ung thư (Máy hơi ấm ti đã vội quẹt nhãn "Hỏng" giả). Bắt buộc phải ép Ngưỡng Thật Cao mới cho phép gắn nhãn.
 
-Trong nhà máy, gán nhãn lỗi thường:
-1. Tốn thời gian.
-2. Phụ thuộc chuyên gia.
-3. Khó mở rộng nhanh.
+## 3. Thiết Lập Thí Nghiệm Trong Dự Án
+- **Chiến lược "Che Mắt" (Masking):** Cố ý giả lập cảnh nghèo đói bằng cách Xoá đi từ 80% đến 90% cột `Machine failure` trong tập AI4I (Sửa nhãn thành -1 / Vô danh). Chỉ chừa lại đúng 10% sự giám sát.
+- **Quy tắc đấu trường:** So găng trực tiếp giữa một bên là **Supervised Base (Mô hình lười)** (Kẻ thà chấp nhận chỉ học trên vỏn vẹn 10% dòng đã đánh nhãn và mặc kệ dòng trống) VÀ một bên là **Self-Training** (Ăn cố 10% dòng rồi nảy nhãn ảo cho 90% phần còn lại).
 
-Do đó, bán giám sát là hướng rất thực dụng cho triển khai thật.
+## 4. Kết Quả Tổng Quan
+Trích xuất từ kết xuất thực tế của pipeline:
+- **Đấu sĩ Ngưỡng cao (`Threshold = 0.95`):** Với lệnh răn đe "Xác suất > 95% mới được phết Mực dán mác mạo danh", mô hình Self-Training cẩn trọng dò dẫm trong ban đêm. Sau khi quẹt thành công nhiều đợt Pseudo-label, đồ thị chỉ số F1 lập tức phóng vụt đi lên, bỏ xa kẻ Supervised Base ngoan cố. Nghĩa là việc thu lượm thêm dữ liệu không đầu đuôi thực sự có ích!
+- **Thoát Thác Lỗi Hủy Diệt (Error Propagation):** Cảnh giác cao độ: Trong Insights báo cáo, nếu ta lơi lỏng `Threshold` xuống, Random Forest bị mờ mắt. Nó tưởng lầm một mũi khoan chỉ "Hơi mòn" là Lỗi, rồi lan truyền rải đinh căn bệnh đó cho hàng nghìn mũi khoan tiếp tục tự học mạo danh sau. Cuối cùng biến cái nhà máy ngập chìm trong Báo Động Giả (False Positive / False Alarm).
 
-## 2. Thiết Lập Thí Nghiệm
-
-### 2.1 Kịch bản thí nghiệm
-
-Đồ án mô phỏng 3 mức thiếu nhãn:
-- 5%
-- 10%
-- 20%
-
-Ở mỗi mức, so sánh 3 phương pháp:
-1. Supervised-only baseline
-2. Self-Training
-3. Label Spreading
-
-### 2.2 Cấu hình trong dự án
-
-Theo `configs/params.yaml` và `src/models/semi_supervised.py`:
-
-Self-Training:
-- base estimator: RandomForestClassifier
-- `threshold = 0.95`
-- `max_iter = 30`
-
-Label Spreading:
-- `kernel = 'rbf'`
-- `alpha = 0.2`
-- `max_iter = 100`
-- giới hạn train `n_max = 5000` để kiểm soát độ phức tạp
-
-Baseline:
-- RandomForest với class_weight balanced trên phần có nhãn
-
-### 2.3 Chỉ số đánh giá
-
-1. F1
-2. Precision
-3. Recall
-4. Accuracy
-5. ROC-AUC/PR-AUC (khi có xác suất)
-
-Ngoài ra còn theo dõi:
-- Số lượng pseudo-label sinh ra
-- Tỷ lệ pseudo-label positive
-
-## 3. Kết Quả Tổng Quan
-
-### 3.1 Xu hướng điển hình
-
-1. Khi tỷ lệ nhãn tăng từ 5% lên 20%, chất lượng tăng rõ.
-2. Self-Training thường vượt baseline nếu threshold hợp lý.
-3. Label Spreading phụ thuộc mạnh vào cấu trúc dữ liệu và scale.
-
-### 3.2 Ý nghĩa vận hành
-
-Kết quả cho thấy:
-- Có thể khởi chạy hệ thống sớm dù nhãn còn ít.
-- Sau đó tăng dần nhãn qua thời gian để cải thiện mô hình.
-
-Đây là lộ trình phù hợp cho nhà máy mới số hóa dữ liệu.
-
-### 3.3 Rủi ro
-
-1. Pseudo-label sai có thể lan truyền lỗi học.
-2. Threshold quá thấp làm nhiễu dữ liệu huấn luyện.
-3. Label Spreading có thể nặng tính toán khi dữ liệu lớn.
-
-## 4. Kết Luận và Khuyến Nghị
-
-### 4.1 Kết luận
-
-- Bán giám sát là chiến lược khả thi khi dữ liệu nhãn khan hiếm.
-- Self-Training là lựa chọn thực dụng, dễ triển khai trong pipeline hiện tại.
-
-### 4.2 Khuyến nghị
-
-1. Bắt đầu với Self-Training và threshold cao (0.9-0.95).
-2. Theo dõi chất lượng pseudo-label theo từng vòng.
-3. Kết hợp active learning để ưu tiên gán nhãn mẫu khó.
-4. Định kỳ so sánh lại với supervised-only để đảm bảo không trôi chất lượng.
+## 5. Kết Luận và Khuyến Nghị
+Công thức cứu rỗi khi Nhà máy quá lười thuê "Nô lệ đánh nhãn dữ liệu".
+- **Khuyến Nghị Hiện Trường:** Luôn luôn khảm thuật toán Self-Training vào đuôi dữ liệu khuyết. Ép chặt tham số `Threshold >= 0.95`. Bên cạnh đó cài đặt một chuông báo cáo phụ: Những máy móc bị AI phết cờ hỏng với xác suất mập mờ (Chỉ nằm viền 70-80%), phải đẩy về cho Human-in-the-loop (Con người) tự tay kiểm duyệt đối chứng.
+- Rời mắt khỏi những nhãn dán "Hỏng/Sống" khô khan, để chuẩn bị đặt câu hỏi mới: **Bao Chờ Thì Hỏng?** ở phần **Hồi Quy & Chuỗi thời gian** siêu bá đạo ngay kế sau.
