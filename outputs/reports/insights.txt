@@ -18,4 +18,6 @@ INSIGHTS & KHUYẾN NGHỊ HÀNH ĐỘNG (BẢN ĐỊNH LƯỢNG)
 
 8. HỒI QUY/CHUỖI THỜI GIAN: Regression hiện tại R2~0.079 (chưa đạt mức sử dụng vận hành), nhưng mô hình chuỗi thời gian GBR_lag_features đạt MAE=4.9306, RMSE=23.4048, R2=0.8625 vượt xa ARIMA (MAE=54.5115, RMSE=62.9723). Khuyến nghị dùng GBR_lag cho dự báo xu hướng ngắn hạn, đồng thời tạm thời không đưa regression thường vào quy trình ra quyết định đến khi nâng được R2.
 
+9. LIMITATIONS HỌC THUẬT CHO CHUỖI THỜI GIAN: Do bộ dữ liệu không có timestamp thực, mô hình hiện dùng UDI như trục thời gian thay thế (temporal proxy). Cách làm này phù hợp cho baseline nghiên cứu nhưng chưa đại diện đầy đủ cho động học thời gian thực của hệ thống. Khuyến nghị xem kết quả time-series hiện tại là tín hiệu hỗ trợ xu hướng; để triển khai production cần bổ sung timestamp/runtime thực theo từng máy và thẩm định lại toàn bộ pipeline theo thứ tự thời gian thật.
+
 ============================================================

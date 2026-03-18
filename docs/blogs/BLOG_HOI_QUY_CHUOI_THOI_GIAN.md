@@ -40,3 +40,15 @@ Nhận xét: GBR_lag_features vượt trội rõ rệt cho dự báo ngắn hạ
 
 ## 6. Câu nói chuẩn để dùng trong báo cáo
 "Tab Hồi quy/Chuỗi thời gian cung cấp mô hình dự báo định lượng và xu hướng; trong kết quả hiện tại, mô hình chuỗi thời gian với đặc trưng trễ cho chất lượng tốt hơn rõ rệt và phù hợp hơn cho hỗ trợ quyết định ngắn hạn."
+
+## 7. Hạn chế phương pháp (Limitations) và điều kiện áp dụng
+Trong bộ dữ liệu AI4I hiện tại không có timestamp thực, nên dự án đang dùng `UDI` như một **temporal proxy** để sắp thứ tự quan sát. Cách làm này phù hợp cho mục tiêu nghiên cứu baseline, nhưng cần nêu rõ các giới hạn học thuật sau:
+
+1. `UDI` là mã định danh, không phản ánh chính xác khoảng cách thời gian giữa các quan sát.
+2. Nếu dữ liệu trộn nhiều bối cảnh vận hành (ca, tải, máy), quan hệ "liền kề theo UDI" có thể không còn mang ý nghĩa động học thực.
+3. Kết quả time-series vì vậy nên được diễn giải là "xấp xỉ xu hướng theo thứ tự quan sát", chưa nên xem là dự báo thời gian thực chuẩn công nghiệp.
+
+Khuyến nghị triển khai thực tế:
+1. Ưu tiên thu thập timestamp thực hoặc runtime-hour theo từng máy.
+2. Tái huấn luyện và đối chiếu lại mô hình sau khi có trục thời gian thật.
+3. Trong giai đoạn chưa có timestamp, chỉ dùng kết quả chuỗi thời gian như lớp hỗ trợ quyết định, không dùng làm tín hiệu dừng máy độc lập.
