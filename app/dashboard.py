@@ -6,13 +6,20 @@ Static layout — no dynamic re-rendering of page structure.
 
 from pathlib import Path
 import math
+import sys
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from dash import Dash, html, dcc, Input, Output, State, callback, no_update
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.data.loader import load_params, load_raw_data, create_data_dictionary
+
 # ── Dữ liệu ──────────────────────────────────────
-ROOT   = Path(__file__).resolve().parent.parent
+ROOT   = PROJECT_ROOT
 TABLES = ROOT / "outputs" / "tables"
 DATA   = ROOT / "data" / "processed"
 
@@ -24,10 +31,22 @@ reg   = pd.read_csv(TABLES / "regression_results.csv")
 semi  = pd.read_csv(TABLES / "semi_supervised_results.csv")
 df    = pd.read_parquet(DATA / "ai4i2020_processed.parquet")
 
+params = load_params(str(ROOT / "configs" / "params.yaml"))
+try:
+    df_raw = load_raw_data(params=params)
+except Exception as exc:
+    raw_csv = ROOT / "data" / "raw" / "ai4i2020.csv"
+    if raw_csv.exists():
+        df_raw = pd.read_csv(raw_csv)
+    else:
+        raise RuntimeError("Khong the tai du lieu raw cho EDA.") from exc
+
+EDA_DF = df_raw
+
 SENSOR_COLS = [c for c in [
     "Air temperature [K]", "Process temperature [K]",
     "Rotational speed [rpm]", "Torque [Nm]", "Tool wear [min]"
-] if c in df.columns]
+] if c in EDA_DF.columns]
 
 FEATURE_LABELS = {
     "Air temperature [K]": "Nhiệt độ không khí [K]",
@@ -76,6 +95,74 @@ def model_family(name):
 
 N_FEATURES = len([c for c in df.columns if c != "Machine failure" and
                    c not in ["UDI", "Product ID", "TWF", "HDF", "PWF", "OSF", "RNF"]])
+
+EDA_NUMERIC_COLS = SENSOR_COLS if SENSOR_COLS else [
+    c for c in EDA_DF.select_dtypes(include="number").columns if c != "Machine failure"
+]
+
+EDA_SUMMARY = {
+    "n_rows": int(len(EDA_DF)),
+    "n_cols": int(EDA_DF.shape[1]),
+    "missing_values": int(EDA_DF.isna().sum().sum()),
+    "duplicate_rows": int(EDA_DF.duplicated().sum()),
+    "n_variables": int(max(EDA_DF.shape[1] - 1, 0)),
+    "failure_rate": float(EDA_DF["Machine failure"].mean() * 100) if "Machine failure" in EDA_DF.columns else float("nan"),
+}
+
+
+_dict_src = create_data_dictionary(EDA_DF)
+DATA_DICTIONARY = pd.DataFrame({
+    "TÊN BIẾN": _dict_src["Column"],
+    "TÊN TIẾNG VIỆT": _dict_src["Column"].map(feature_label),
+    "KIỂU DỮ LIỆU": _dict_src["Type"],
+    "MÔ TẢ": _dict_src["Description"],
+})
+
+
+def dictionary_table(theme="dark"):
+    t = T(theme)
+    head = html.Tr([
+        html.Th("TÊN BIẾN", style={"textAlign": "left", "padding": "10px", "color": t["font_sub"], "fontSize": "12px"}),
+        html.Th("TÊN TIẾNG VIỆT", style={"textAlign": "left", "padding": "10px", "color": t["font_sub"], "fontSize": "12px"}),
+        html.Th("KIỂU DỮ LIỆU", style={"textAlign": "left", "padding": "10px", "color": t["font_sub"], "fontSize": "12px"}),
+        html.Th("MÔ TẢ", style={"textAlign": "left", "padding": "10px", "color": t["font_sub"], "fontSize": "12px"}),
+    ])
+
+    rows = []
+    for i, row in DATA_DICTIONARY.iterrows():
+        row_bg = "rgba(255,255,255,0.02)" if i % 2 else "rgba(255,255,255,0)"
+        rows.append(html.Tr([
+            html.Td(html.Span(str(row["TÊN BIẾN"]), style={
+                "display": "inline-block",
+                "padding": "2px 8px",
+                "borderRadius": "6px",
+                "backgroundColor": t["tab_sel_bg"],
+                "color": t["accent"],
+                "fontFamily": "monospace",
+                "fontSize": "12px",
+            }), style={"padding": "10px", "borderTop": f"1px solid {t['card_bdr']}"}),
+            html.Td(str(row["TÊN TIẾNG VIỆT"]), style={"padding": "10px", "borderTop": f"1px solid {t['card_bdr']}"}),
+            html.Td(html.Span(str(row["KIỂU DỮ LIỆU"]), style={
+                "display": "inline-block",
+                "padding": "2px 8px",
+                "borderRadius": "6px",
+                "backgroundColor": "rgba(255,153,0,0.15)",
+                "color": "#ff9900",
+                "fontFamily": "monospace",
+                "fontSize": "12px",
+            }), style={"padding": "10px", "borderTop": f"1px solid {t['card_bdr']}"}),
+            html.Td(str(row["MÔ TẢ"]), style={"padding": "10px", "borderTop": f"1px solid {t['card_bdr']}"}),
+        ], style={"backgroundColor": row_bg}))
+
+    return html.Div([
+        html.H4("Mô tả biến (Data Dictionary)", style={"margin": "0 0 12px", "color": t["accent"]}),
+        html.Div(style={"overflowX": "auto"}, children=[
+            html.Table([
+                html.Thead(head),
+                html.Tbody(rows),
+            ], style={"width": "100%", "borderCollapse": "collapse", "fontSize": "15px"}),
+        ]),
+    ])
 
 # ==================================================
 # THEME
@@ -567,6 +654,110 @@ def fig_semi_pseudo(theme="dark"):
     ))
     return fig
 
+
+def fig_outlier_detection(theme="dark", threshold=1.5):
+    t = T(theme)
+    if not EDA_NUMERIC_COLS:
+        return go.Figure(layout=_lo(t, "Phát hiện outlier theo IQR"))
+
+    rows = []
+    for c in EDA_NUMERIC_COLS:
+        q1 = EDA_DF[c].quantile(0.25)
+        q3 = EDA_DF[c].quantile(0.75)
+        iqr = q3 - q1
+        lo = q1 - threshold * iqr
+        hi = q3 + threshold * iqr
+        mask = (EDA_DF[c] < lo) | (EDA_DF[c] > hi)
+        rows.append({
+            "column": c,
+            "count": int(mask.sum()),
+            "pct": float(mask.mean() * 100),
+            "lo": float(lo),
+            "hi": float(hi),
+        })
+
+    out = pd.DataFrame(rows).sort_values("count", ascending=False)
+    out["label"] = out["column"].map(feature_label)
+
+    fig = go.Figure(go.Bar(
+        x=out["label"],
+        y=out["count"],
+        marker_color=t["bar"][3][0],
+        marker_line=dict(color=t["bar"][3][1], width=1),
+        text=out["pct"].map(lambda v: f"{v:.2f}%"),
+        textposition="auto",
+        customdata=out[["lo", "hi", "pct"]].to_numpy(),
+        hovertemplate=(
+            "Biến: %{x}<br>"
+            "Outlier (IQR): %{y}<br>"
+            "Tỷ lệ: %{customdata[2]:.3f}%<br>"
+            "Ngưỡng dưới: %{customdata[0]:.4f}<br>"
+            "Ngưỡng trên: %{customdata[1]:.4f}<br>"
+            "<extra></extra>"
+        ),
+    ))
+    fig.update_layout(**_lo(
+        t,
+        "Phát hiện outlier theo IQR (dữ liệu thô)",
+        xaxis_title="Biến số",
+        yaxis_title="Số điểm outlier",
+    ))
+    fig.update_xaxes(tickangle=-20)
+    if out["count"].sum() == 0:
+        fig.add_annotation(
+            text="Không phát hiện outlier theo ngưỡng IQR hiện tại.",
+            xref="paper", yref="paper", x=0.5, y=1.08,
+            showarrow=False, font=dict(color=t["font_sub"], size=12),
+        )
+        fig.update_yaxes(range=[-0.1, 1])
+    return fig
+
+
+def fig_boxplot_detail(theme="dark"):
+    t = T(theme)
+    if not EDA_NUMERIC_COLS:
+        fig = go.Figure()
+        fig.update_layout(**_lo(t, "Boxplot chi tiết từng biến"))
+        return fig
+
+    n_cols = 2
+    n_rows = math.ceil(len(EDA_NUMERIC_COLS) / n_cols)
+    specs = [[{"type": "box"} for _ in range(n_cols)] for _ in range(n_rows)]
+    fig = make_subplots(
+        rows=n_rows,
+        cols=n_cols,
+        subplot_titles=[feature_label(c) for c in EDA_NUMERIC_COLS],
+        specs=specs,
+        vertical_spacing=0.12,
+        horizontal_spacing=0.08,
+    )
+
+    for i, c in enumerate(EDA_NUMERIC_COLS):
+        row = i // n_cols + 1
+        col = i % n_cols + 1
+        fig.add_trace(go.Box(
+            y=EDA_DF[c],
+            name="",
+            boxpoints="outliers",
+            marker=dict(color=t["seq"][i % len(t["seq"])]),
+            line=dict(color=t["seq"][i % len(t["seq"])]),
+            hovertemplate=(
+                "Biến: " + feature_label(c) + "<br>"
+                "Giá trị: %{y:.4f}<br>"
+                "<extra></extra>"
+            ),
+            showlegend=False,
+        ), row=row, col=col)
+        fig.update_xaxes(showticklabels=False, row=row, col=col)
+        fig.update_yaxes(title_text="Giá trị", row=row, col=col)
+
+    fig.update_layout(**_lo(
+        t,
+        "Boxplot chi tiết từng biến",
+        height=max(420, 320 * n_rows),
+    ))
+    return fig
+
 def fig_hist(col, theme="dark"):
     t = T(theme)
     n = df[df["Machine failure"] == 0][col]
@@ -697,15 +888,10 @@ app.layout = html.Div(id="root", style={
     html.Div(id="kpi-row", style={
         "display":"grid","gridTemplateColumns":"repeat(4,1fr)","gap":"16px","marginBottom":"30px",
     }, children=[
-        _kpi("TỔNG BẢN GHI", f"{len(df):,}", DARK["kpi"][0]),
-        _kpi("TỶ LỆ LỖI", f"{df['Machine failure'].mean()*100:.2f}%", DARK["kpi"][1]),
-        html.Div([
-            _kpi("ĐIỂM F1 TỐT NHẤT", f"{clf['f1'].max():.4f}", DARK["kpi"][2]),
-            html.P(clf.loc[clf["f1"].idxmax(),"model"].upper(),
-                   style={"fontSize":"11px","color":DARK["kpi"][2],"margin":"-12px 0 0 20px",
-                          "opacity":".6"}, className="kpi-model"),
-        ]),
-        _kpi("ĐẶC TRƯNG", str(N_FEATURES), DARK["kpi"][3]),
+        _kpi("SỐ DÒNG", f"{EDA_SUMMARY['n_rows']:,}", DARK["kpi"][0]),
+        _kpi("SỐ CỘT", str(EDA_SUMMARY["n_cols"]), DARK["kpi"][1]),
+        _kpi("GIÁ TRỊ THIẾU", f"{EDA_SUMMARY['missing_values']:,}", DARK["kpi"][2]),
+        _kpi("DÒNG TRÙNG LẶP", f"{EDA_SUMMARY['duplicate_rows']:,}", DARK["kpi"][3]),
     ]),
 
     # ── Tabs (STATIC — always in DOM) ──
@@ -713,11 +899,6 @@ app.layout = html.Div(id="root", style={
         colors={"border":DARK["tab_bdr"],"primary":DARK["accent"],"background":DARK["tab_bg"]},
         style={"marginBottom":"20px"}, children=[
             dcc.Tab(label="Khám phá EDA",   value="eda",     id="tab-eda",     style=_tab_style(DARK), selected_style=_tab_sel(DARK)),
-            dcc.Tab(label="Phân loại",      value="clf",     id="tab-clf",     style=_tab_style(DARK), selected_style=_tab_sel(DARK)),
-            dcc.Tab(label="Phân cụm",       value="cluster", id="tab-cluster", style=_tab_style(DARK), selected_style=_tab_sel(DARK)),
-            dcc.Tab(label="Bất thường",     value="anomaly", id="tab-anomaly", style=_tab_style(DARK), selected_style=_tab_sel(DARK)),
-            dcc.Tab(label="Hồi quy",        value="reg",     id="tab-reg",     style=_tab_style(DARK), selected_style=_tab_sel(DARK)),
-            dcc.Tab(label="Bán giám sát",   value="semi",    id="tab-semi",    style=_tab_style(DARK), selected_style=_tab_sel(DARK)),
         ],
     ),
 
@@ -749,11 +930,6 @@ def toggle(n, cur):
     Output("theme-btn","style"),
     Output("main-tabs","colors"),
     Output("kpi-row","children"),
-    Output("tab-clf","style"), Output("tab-clf","selected_style"),
-    Output("tab-cluster","style"), Output("tab-cluster","selected_style"),
-    Output("tab-anomaly","style"), Output("tab-anomaly","selected_style"),
-    Output("tab-reg","style"), Output("tab-reg","selected_style"),
-    Output("tab-semi","style"), Output("tab-semi","selected_style"),
     Output("tab-eda","style"), Output("tab-eda","selected_style"),
     Input("theme-store","data"),
 )
@@ -779,41 +955,34 @@ def apply_theme(theme):
         "borderRadius":"12px","padding":"20px","marginBottom":"16px", **kw})
     kpis = [
         cs([
-            html.P("TỔNG BẢN GHI", style={"fontSize":"11px","letterSpacing":"2px",
+             html.P("SỐ DÒNG", style={"fontSize":"11px","letterSpacing":"2px",
                    "margin":"0 0 4px","color":t["font_sub"]}),
-            html.H2(f"{len(df):,}", style={"fontFamily":"Orbitron","fontSize":"32px",
+             html.H2(f"{EDA_SUMMARY['n_rows']:,}", style={"fontFamily":"Orbitron","fontSize":"32px",
                      "margin":"0","color":t["kpi"][0]}),
         ]),
         cs([
-            html.P("TỶ LỆ LỖI", style={"fontSize":"11px","letterSpacing":"2px",
+             html.P("SỐ CỘT", style={"fontSize":"11px","letterSpacing":"2px",
                    "margin":"0 0 4px","color":t["font_sub"]}),
-            html.H2(f"{df['Machine failure'].mean()*100:.2f}%",
+             html.H2(str(EDA_SUMMARY["n_cols"]),
                      style={"fontFamily":"Orbitron","fontSize":"32px",
                             "margin":"0","color":t["kpi"][1]}),
         ]),
-        html.Div([
-            cs([
-                html.P("ĐIỂM F1 TỐT NHẤT", style={"fontSize":"11px","letterSpacing":"2px",
-                       "margin":"0 0 4px","color":t["font_sub"]}),
-                html.H2(f"{clf['f1'].max():.4f}", style={"fontFamily":"Orbitron","fontSize":"32px",
-                         "margin":"0","color":t["kpi"][2]}),
-            ]),
-                 html.P(model_label(clf.loc[clf["f1"].idxmax(),"model"]),
-                   style={"fontSize":"11px","color":t["kpi"][2],
-                          "margin":"-12px 0 0 20px","opacity":".6"}),
-        ]),
         cs([
-            html.P("ĐẶC TRƯNG", style={"fontSize":"11px","letterSpacing":"2px",
+             html.P("GIÁ TRỊ THIẾU", style={"fontSize":"11px","letterSpacing":"2px",
                    "margin":"0 0 4px","color":t["font_sub"]}),
-            html.H2(str(N_FEATURES), style={"fontFamily":"Orbitron","fontSize":"32px",
+             html.H2(f"{EDA_SUMMARY['missing_values']:,}", style={"fontFamily":"Orbitron","fontSize":"32px",
+                "margin":"0","color":t["kpi"][2]}),
+         ]),
+         cs([
+             html.P("DÒNG TRÙNG LẶP", style={"fontSize":"11px","letterSpacing":"2px",
+                 "margin":"0 0 4px","color":t["font_sub"]}),
+             html.H2(f"{EDA_SUMMARY['duplicate_rows']:,}", style={"fontFamily":"Orbitron","fontSize":"32px",
                      "margin":"0","color":t["kpi"][3]}),
         ]),
     ]
     tab_s = _tab_style(t)
     tab_ss = _tab_sel(t)
-    return (root, hdr, title, sub, t["toggle_label"], btn, colors, kpis,
-            tab_s, tab_ss, tab_s, tab_ss, tab_s, tab_ss,
-            tab_s, tab_ss, tab_s, tab_ss, tab_s, tab_ss)
+    return (root, hdr, title, sub, t["toggle_label"], btn, colors, kpis, tab_s, tab_ss)
 
 
 # ---- Render tab content (reacts to BOTH tab switch AND theme change) ----
@@ -824,7 +993,6 @@ def apply_theme(theme):
 )
 def render_tab(tab, theme):
     t = T(theme)
-    GH  = {"height":"420px"}
     GHF = {"height":"480px"}
 
     def crd(children, **kw):
@@ -832,149 +1000,37 @@ def render_tab(tab, theme):
             "background":t["card"],"border":f"1px solid {t['card_bdr']}",
             "borderRadius":"12px","padding":"20px","marginBottom":"16px", **kw})
 
-    if tab == "clf":
-        return html.Div([
-            crd([
-                html.H4("Thứ tự đọc đề xuất", style={"margin":"0 0 10px", "color":t["accent"]}),
-                html.P(
-                    "Bước 1: xem F1 & PR-AUC để chọn mô hình mạnh nhất. "
-                    "Bước 2: xem Precision/Recall để cân bằng báo động giả và bỏ sót lỗi. "
-                    "Bước 3: xem Cross-Validation để kiểm tra độ ổn định. "
-                    "Bước 4: xem thời gian huấn luyện để đánh giá chi phí triển khai.",
-                    style={"margin":"0", "lineHeight":"1.7", "color":t["font"]},
-                ),
-            ]),
-            html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"16px"}, children=[
-                crd([dcc.Graph(figure=fig_clf(theme),  config={"displayModeBar":False}, style=GH)]),
-                crd([dcc.Graph(figure=fig_pr(theme),   config={"displayModeBar":False}, style=GH)]),
-            ]),
-            html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"16px"}, children=[
-                crd([dcc.Graph(figure=fig_cv(theme),   config={"displayModeBar":False}, style=GH)]),
-                crd([dcc.Graph(figure=fig_time(theme),  config={"displayModeBar":False}, style=GH)]),
-            ]),
-        ])
-    if tab == "cluster":
-        return html.Div([
-            crd([
-                html.H4("Cách đọc nhanh", style={"margin":"0 0 10px", "color":t["accent"]}),
-                html.P(
-                    "Đọc theo 3 bước: (1) xem Silhouette để chọn cụm tách biệt tốt, "
-                    "(2) xem bản đồ Silhouette vs Davies-Bouldin để kiểm tra cân bằng chất lượng, "
-                    "(3) ưu tiên điểm ở vùng góc trên-trái (Silhouette cao, Davies-Bouldin thấp).",
-                    style={"margin":"0", "lineHeight":"1.7"},
-                ),
-            ]),
-            html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"16px"}, children=[
-                crd([dcc.Graph(figure=fig_cluster(theme), config={"displayModeBar":False},
-                              style={"height":"500px"})]),
-                crd([dcc.Graph(figure=fig_cluster_tradeoff(theme), config={"displayModeBar":False},
-                              style={"height":"500px"})]),
-            ]),
-        ])
-    if tab == "anomaly":
-        return html.Div([
-            crd([
-                html.H4("Cách đọc nhanh", style={"margin":"0 0 10px", "color":t["accent"]}),
-                html.P(
-                    "Biểu đồ trái cho biết mỗi phương pháp bắt được bao nhiêu điểm bất thường. "
-                    "Biểu đồ phải cho biết chất lượng phát hiện qua F1 (cao hơn là tốt hơn).",
-                    style={"margin":"0", "lineHeight":"1.7"},
-                ),
-            ]),
-            crd([dcc.Graph(figure=fig_anom(theme), config={"displayModeBar":False}, style=GHF)]),
-        ])
-    if tab == "reg":
-        return html.Div([
-            crd([
-                html.H4("Cách đọc nhanh", style={"margin":"0 0 10px", "color":t["accent"]}),
-                html.P(
-                    "Bước 1: so sánh MAE/RMSE (càng thấp càng tốt). "
-                    "Bước 2: xem R2 để biết mô hình có vượt baseline trung bình hay không (R2 âm là chưa tốt). "
-                    "Bước 3: xem thời gian huấn luyện để cân bằng hiệu quả và chi phí triển khai.",
-                    style={"margin":"0", "lineHeight":"1.7"},
-                ),
-            ]),
-            html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"16px"}, children=[
-                crd([dcc.Graph(figure=fig_reg(theme), config={"displayModeBar":False}, style=GHF)]),
-                crd([dcc.Graph(figure=fig_reg_r2_time(theme), config={"displayModeBar":False}, style=GHF)]),
-            ]),
-        ])
-    if tab == "semi":
-        return html.Div([
-            crd([
-                html.H4("Cách đọc nhanh", style={"margin":"0 0 10px", "color":t["accent"]}),
-                html.P(
-                    "Bước 1: xem đường F1 theo tỷ lệ nhãn. Bước 2: xem biểu đồ Delta F1 để biết phương pháp nào tăng thêm so với baseline. "
-                    "Bước 3: xem số nhãn giả mà Self-Training đã bổ sung để hiểu cơ chế tận dụng dữ liệu chưa gán nhãn.",
-                    style={"margin":"0", "lineHeight":"1.7"},
-                ),
-            ]),
-            html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"16px"}, children=[
-                crd([dcc.Graph(figure=fig_semi(theme), config={"displayModeBar":False}, style=GHF)]),
-                crd([dcc.Graph(figure=fig_semi_gain(theme), config={"displayModeBar":False}, style=GHF)]),
-            ]),
-            crd([dcc.Graph(figure=fig_semi_pseudo(theme), config={"displayModeBar":False}, style={"height":"360px"})]),
-        ])
-    if tab == "eda":
-        dd = {"backgroundColor":t["dd_bg"],"color":t["dd_c"],"border":f"1px solid {t['dd_bdr']}"}
-        dd_class = "dropdown-light" if theme == "light" else "dropdown-dark"
-        return html.Div([
-            crd([
-                html.H4("Bắt đầu từ đây", style={"margin":"0 0 10px", "color":t["accent"]}),
-                html.P(
-                    "EDA giúp hiểu dữ liệu trước khi đọc kết quả mô hình. "
-                    "Bên trái xem phân phối từng biến giữa mẫu bình thường và mẫu lỗi. "
-                    "Bên phải xem quan hệ giữa 2 biến để tìm vùng rủi ro.",
-                    style={"margin":"0", "lineHeight":"1.7"},
-                ),
-            ]),
-            html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"16px"}, children=[
-                crd([
-                    html.Label("Chọn đặc trưng:", style={"fontSize":"13px","color":t["font_sub"]}),
-                    dcc.Dropdown(id="hist-feature",
-                        options=[{"label":feature_label(c),"value":c} for c in SENSOR_COLS],
-                        value=SENSOR_COLS[0] if SENSOR_COLS else None, style=dd, className=dd_class),
-                    dcc.Graph(id="hist-chart", config={"displayModeBar":False}, style=GH),
-                ]),
-                crd([
-                    html.Div(style={"display":"flex","gap":"12px","marginBottom":"8px"}, children=[
-                        html.Div([
-                            html.Label("Trục X:", style={"fontSize":"13px","color":t["font_sub"]}),
-                            dcc.Dropdown(id="scatter-x-dash",
-                                options=[{"label":feature_label(c),"value":c} for c in SENSOR_COLS],
-                                value=SENSOR_COLS[2] if len(SENSOR_COLS)>2 else SENSOR_COLS[0] if SENSOR_COLS else None,
-                                style={**dd,"width":"220px"}, className=dd_class),
-                        ]),
-                        html.Div([
-                            html.Label("Trục Y:", style={"fontSize":"13px","color":t["font_sub"]}),
-                            dcc.Dropdown(id="scatter-y-dash",
-                                options=[{"label":feature_label(c),"value":c} for c in SENSOR_COLS],
-                                value=SENSOR_COLS[3] if len(SENSOR_COLS)>3 else SENSOR_COLS[0] if SENSOR_COLS else None,
-                                style={**dd,"width":"220px"}, className=dd_class),
-                        ]),
-                    ]),
-                    dcc.Graph(id="scatter-chart-dash", config={"displayModeBar":False}, style=GH),
-                ]),
-            ]),
-        ])
-    return html.Div()
+    summary_items = [
+        ("Số dòng", f"{EDA_SUMMARY['n_rows']:,}"),
+        ("Số cột", str(EDA_SUMMARY["n_cols"])),
+        ("Giá trị thiếu", f"{EDA_SUMMARY['missing_values']:,}"),
+        ("Dòng trùng lặp", f"{EDA_SUMMARY['duplicate_rows']:,}"),
+        ("Biến số", str(EDA_SUMMARY["n_variables"])),
+        ("Tỷ lệ lỗi", f"{EDA_SUMMARY['failure_rate']:.2f}%"),
+    ]
 
-
-@callback(Output("hist-chart","figure"),
-          Input("hist-feature","value"),
-          State("theme-store","data"))
-def update_hist(col, theme):
-    if not col: return go.Figure()
-    return fig_hist(col, theme)
-
-
-@callback(Output("scatter-chart-dash","figure"),
-          Input("scatter-x-dash","value"),
-          Input("scatter-y-dash","value"),
-          State("theme-store","data"))
-def update_scatter(xc, yc, theme):
-    if not xc or not yc: return go.Figure()
-    return fig_scat(xc, yc, theme)
+    return html.Div([
+        crd([
+            html.H4("Bắt đầu từ đây", style={"margin":"0 0 10px", "color":t["accent"]}),
+            html.P(
+                "Dash này chỉ tập trung EDA và đã bỏ các tab mô hình vì đã có trên dashboard API. "
+                "Outlier và boxplot được tính trên dữ liệu thô để phản ánh đúng phân phối ban đầu trước tiền xử lý.",
+                style={"margin":"0", "lineHeight":"1.7"},
+            ),
+        ]),
+        html.Div(style={"display":"grid", "gridTemplateColumns":"repeat(3, minmax(180px, 1fr))", "gap":"12px"}, children=[
+            crd([
+                html.P(lbl, style={"fontSize":"12px", "letterSpacing":"1px", "margin":"0 0 6px", "color":t["font_sub"]}),
+                html.H3(val, style={"margin":"0", "color":t["accent"], "fontFamily":"Orbitron", "fontSize":"24px"}),
+            ], padding="14px")
+            for lbl, val in summary_items
+        ]),
+        crd([dictionary_table(theme)]),
+        html.Div(style={"display":"grid","gridTemplateColumns":"1fr 1fr","gap":"16px"}, children=[
+            crd([dcc.Graph(figure=fig_outlier_detection(theme), config={"displayModeBar":False}, style=GHF)]),
+            crd([dcc.Graph(figure=fig_boxplot_detail(theme), config={"displayModeBar":False}, style={"height":"640px"})]),
+        ]),
+    ])
 
 
 # ==================================================
